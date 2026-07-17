@@ -11,7 +11,6 @@ from bs4 import BeautifulSoup
 
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +42,9 @@ class OrangeHRMClient:
     _session: aiohttp.ClientSession
 
     def __init__(
-        self, session: aiohttp.ClientSession, config: dict[str, Any] | None = None
+        self,
+        session: aiohttp.ClientSession,
+        config: dict[str, Any] | None = None,
     ):
         """Load config and prepare internal variables."""
 
@@ -201,3 +202,75 @@ class OrangeHRMClient:
             ) from exc
 
         return data["data"]
+
+    async def is_employee_id_free(self, employee_id: str) -> bool:
+        """Test whether employee id is already used in OrangeHRM."""
+        async with self._session.get(
+            self._url(
+                "/web/index.php/api/v2/core/validation/unique",
+                {
+                    "value": employee_id,
+                    "entityName": "Employee",
+                    "attributeName": "employeeId",
+                },
+            ),
+        ) as response:
+            response.raise_for_status()
+            data = await response.json()
+            try:
+                return bool(data["data"]["valid"])
+            except KeyError as exc:
+                raise OrangeHRMUnexpectedDataError(
+                    "employee id check response does not have one or "
+                    "more required keys",
+                ) from exc
+
+    async def fetch_suggested_new_employee_id(self) -> str:
+        """Fetch suggested unused employee id unused."""
+
+        async with self._session.get(
+            self._url("/web/index.php/pim/addEmployee"),
+        ) as response:
+            html = await response.content.read()
+            soup = BeautifulSoup(html, features="html.parser")
+            if suggested_data := soup.select_one("employee-save"):
+                return str(suggested_data.attrs[":emp-id"]).strip('"')
+
+        raise OrangeHRMUnexpectedDataError("Error fetching suggested new employee id")
+
+    async def create_employee(
+        self,
+        first_name: str,
+        middle_name: str,
+        last_name: str,
+    ) -> int:
+        """Create new employee with and return its number."""
+
+        employee_id = await self.fetch_suggested_new_employee_id()
+
+        async with self._session.post(
+            self._url("/web/index.php/api/v2/pim/employees"),
+            json={
+                "firstName": first_name,
+                "middleName": middle_name,
+                "lastName": last_name,
+                "empPicture": None,
+                "employeeId": str(employee_id),
+            },
+        ) as response:
+            try:
+                response.raise_for_status()
+            except Exception as exc:
+                raise OrangeHRMRegularError("error creating employee") from exc
+
+            data = await response.json()
+
+            try:
+                employee_num = data["data"]["empNumber"]
+            except KeyError as exc:
+                raise OrangeHRMUnexpectedDataError(
+                    "unexpected response on creating employee",
+                ) from exc
+
+        logger.debug(f"Created employee {employee_num}")
+        return employee_num
