@@ -30,6 +30,13 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 package-mode = false
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-m 'not e2e_staging'"
+markers = [
+    "e2e_staging: end-to-end tests against the live staging portal (opt-in)",
+]
+
 [tool.ruff]
 line-length = 88
 
@@ -47,4 +54,11 @@ ignore = [
     "EM101", # Exception must not use a string literal, assign to variable first
     "EM102", # Exception must not use an f-string literal, assign to variable first
 
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "D104", # Missing docstring in public package
+    "S105", # Possible hardcoded password (public demo credentials)
+    "S106", # Possible hardcoded password (public demo credentials)
 ]
