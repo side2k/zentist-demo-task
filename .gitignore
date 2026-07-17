@@ -1,0 +1,12 @@
+.venv
+.vscode
+.envrc
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+/logs/
+/reports/
+

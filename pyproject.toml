@@ -1,0 +1,45 @@
+[project]
+name = "trial-task"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Leonid Amirov",email = "leonid.amirov@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp (>=3.14.1,<4.0.0)",
+    "beautifulsoup4 (>=4.15.0,<5.0.0)",
+]
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.15.21,<0.16.0)",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN204", # Missing return type annotation for special method `__init__`
+    "D107", # Missing docstring in `__init__`
+    "D202", # No blank lines allowed after function docstring (found 1)
+    "D203", # Incompatible with D211 - using D211 instead
+    "D213", # Incompatible with D212 - using D212 instead
+    "D401", # First line of docstring should be in imperative mood
+    "G004", # Logging statement uses f-string
+    "TRY003", # Avoid specifying long messages outside the exception class
+    "EM101", # Exception must not use a string literal, assign to variable first
+    "EM102", # Exception must not use an f-string literal, assign to variable first
+
+]
