@@ -9,7 +9,7 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 import aiohttp
 from bs4 import BeautifulSoup
 
-from errors import UnrecoverablePortalError
+from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,12 @@ class OrangeHRMUnexpectedDataError(UnrecoverablePortalError):
 
     def __init__(self, details: str):
         super().__init__(f"OrangeHRM output data changed: {details}")
+
+
+class OrangeHRMRegularError(RecoverablePortalError):
+    """Errors that do not mean we should abort doing what we doing - e.g.
+    invalid object id.
+    """  # noqa: D205
 
 
 DEFAULT_CONFIG = {
@@ -165,3 +171,33 @@ class OrangeHRMClient:
         logger.debug(f"{page_total=}, {offset=}, {total_reported=}")
 
         return employees
+
+    async def fetch_employee(self, employee_id: int) -> dict[str, Any]:
+        """Fetch single employee data from OrangeHRM employee directory."""
+        async with self._session.get(
+            self._url(
+                f"/web/index.php/api/v2/directory/employees/{employee_id}",
+                {"model": "detailed"},
+            ),
+        ) as response:
+            data = await response.json()
+
+        if error := data.get("error"):
+            error_msg = str(error)
+            if isinstance(error, dict):
+                error_msg = error.get("message") or error_msg
+
+            raise OrangeHRMRegularError(
+                f"Error fetching employee {employee_id}: {error}",
+            )
+
+        try:
+            employee_data = data["data"]
+            for required_key in ["empNumber", "lastName", "firstName", "middleName"]:
+                _ = employee_data[required_key]
+        except KeyError as exc:
+            raise OrangeHRMUnexpectedDataError(
+                "employee dict does not contain required keys",
+            ) from exc
+
+        return data["data"]
