@@ -274,3 +274,31 @@ class OrangeHRMClient:
 
         logger.debug(f"Created employee {employee_num}")
         return employee_num
+
+    async def delete_employees(self, employee_nums: list[int]) -> None:
+        """Delete employees with a given numbers."""
+
+        logger.debug(f"Deleting employees {employee_nums}")
+        async with self._session.delete(
+            self._url("/web/index.php/api/v2/pim/employees"),
+            json={"ids": employee_nums},
+        ) as response:
+            try:
+                response.raise_for_status()
+            except Exception as exc:
+                raise OrangeHRMRegularError("error deleting employee") from exc
+
+            data = await response.json()
+
+            try:
+                deleted_nums = [int(emp_num) for emp_num in data["data"]]
+            except KeyError as exc:
+                raise OrangeHRMUnexpectedDataError(
+                    "unexpected response on deleting employees",
+                ) from exc
+
+            if sorted(employee_nums) != sorted(deleted_nums):
+                raise OrangeHRMUnexpectedDataError(
+                    "reported list of deleted employees differs from the request. "
+                    f"Requested {employee_nums}, reported {deleted_nums}",
+                )
