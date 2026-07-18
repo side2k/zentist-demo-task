@@ -20,6 +20,7 @@ class EmployeeSubunit(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     id: int | None = None
     name: str | None = None
+    unit_id: str | None = None
 
 
 class EmployeeLocation(BaseModel):
@@ -114,3 +115,68 @@ class EmployeePersonalDetails(BaseModel):
     driving_license_expired_date: str | None = None
     gender: int | None = None
     birthday: str | None = None
+
+
+class JobSpecificationAttachment(BaseModel):
+    """Job specification attachment reference on an employee job details record."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    id: int | None = None
+    filename: str | None = None
+
+
+class EmploymentStatus(BaseModel):
+    """Employment status reference on an employee job details record."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    id: int | None = None
+    name: str | None = None
+
+
+class JobCategory(BaseModel):
+    """Job category reference on an employee job details record."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    id: int | None = None
+    name: str | None = None
+
+
+class EmployeeTerminationRecord(BaseModel):
+    """Termination record reference on an employee job details record."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    id: int | None = None
+    date: str | None = None
+
+
+class EmployeeJobDetails(BaseModel):
+    """Employee's job details model."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    emp_number: int | None = None
+    joined_date: str | None = None
+    job_title: JobTitle = JobTitle()
+    job_specification_attachment: JobSpecificationAttachment = (
+        JobSpecificationAttachment()
+    )
+    emp_status: EmploymentStatus = EmploymentStatus()
+    job_category: JobCategory = JobCategory()
+    subunit: EmployeeSubunit = EmployeeSubunit()
+    location: EmployeeLocation = EmployeeLocation()
+    employee_termination_record: EmployeeTerminationRecord = EmployeeTerminationRecord()
+
+    def to_update_payload(self) -> dict:
+        """Build the flat payload accepted by the job-details PUT endpoint.
+
+        Fields with a None value are omitted.
+        """
+        payload = {
+            "joinedDate": self.joined_date,
+            "jobTitleId": self.job_title.id,
+            "empStatusId": self.emp_status.id,
+            "jobCategoryId": self.job_category.id,
+            "subunitId": self.subunit.id,
+            "locationId": self.location.id,
+        }
+        return {key: value for key, value in payload.items() if value is not None}

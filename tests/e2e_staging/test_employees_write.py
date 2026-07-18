@@ -35,3 +35,28 @@ async def test_employee_personal_details_update(
     )
 
     assert updated_personal_details.last_name == new_last_name
+
+
+async def test_employee_job_details_update(
+    orange_hrm_client: OrangeHRMClient,
+    orange_hrm_employee: int,
+) -> None:
+    job_details = await orange_hrm_client.fetch_employee_job_details(
+        orange_hrm_employee,
+    )
+    new_joined_date = "2001-02-03"
+    assert job_details.joined_date != new_joined_date
+    job_details.joined_date = new_joined_date
+
+    job_details.emp_number = None
+
+    await orange_hrm_client.update_employee_job_details(
+        orange_hrm_employee,
+        job_details,
+    )
+
+    updated_job_details = await orange_hrm_client.fetch_employee_job_details(
+        orange_hrm_employee,
+    )
+
+    assert updated_job_details.joined_date == new_joined_date
