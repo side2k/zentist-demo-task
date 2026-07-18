@@ -88,6 +88,38 @@ class EmployeesPage(ApiResponse[list[EmployeeSummary]]):
     meta: EmployeesPageMeta
 
 
+class SalaryAttachment(BaseModel):
+    """A single salary attachment entry on an employee record."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    id: int
+    description: str | None = None
+    filename: str
+    size: int
+    file_type: str | None = None
+    attached_by: int | None = None
+    attached_by_name: str | None = None
+    attached_time: str | None = None
+    attached_date: str | None = None
+
+
+class SalaryAttachmentsPageMeta(BaseModel):
+    """Metadata returned with a salary attachments page."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    emp_number: int
+    screen: str
+    total: int
+
+
+class SalaryAttachmentsPage(ApiResponse[list[SalaryAttachment]]):
+    """A single page from the salary attachments endpoint."""
+
+    meta: SalaryAttachmentsPageMeta
+
+
 class CreateEmployeeData(BaseModel):
     """Inner data object returned when creating an employee."""
 

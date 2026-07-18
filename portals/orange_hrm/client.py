@@ -19,6 +19,8 @@ from portals.orange_hrm.models import (
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
+    SalaryAttachment,
+    SalaryAttachmentsPage,
     UniqueCheckData,
 )
 
@@ -348,3 +350,56 @@ class OrangeHRMClient:
                 json_body=job_details.to_update_payload(),
             )
         ).data
+
+    async def fetch_salary_attachments_page(
+        self,
+        employee_num: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> SalaryAttachmentsPage:
+        """Fetch a single page of salary attachments for an employee."""
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+
+        logger.debug(
+            f"Fetching salary attachments page: {employee_num=}, {limit=}, {offset=}",
+        )
+        return await self._api_call(
+            "GET",
+            f"/web/index.php/api/v2/pim/employees/{employee_num}/screen/salary/attachments",
+            SalaryAttachmentsPage,
+            query={"limit": limit, "offset": offset},
+        )
+
+    async def fetch_all_salary_attachments(
+        self,
+        employee_num: int,
+        page_size: int = 100,
+    ) -> list[SalaryAttachment]:
+        """Fetch all salary attachments for an employee."""
+        if page_size <= 0:
+            raise ValueError("page_size must be positive")
+
+        attachments: list[SalaryAttachment] = []
+        offset = 0
+        page_total: int | None = None
+        while page_total is None or page_total >= page_size:
+            page = await self.fetch_salary_attachments_page(
+                employee_num,
+                limit=page_size,
+                offset=offset,
+            )
+            total_reported = page.meta.total
+            page_total = len(page.data)
+            attachments.extend(page.data)
+
+            if len(attachments) >= total_reported:
+                break
+
+            offset += page_size
+
+        logger.debug(f"{page_total=}, {offset=}, {total_reported=}")
+
+        return attachments
