@@ -66,6 +66,12 @@ class EmployeesPage(BaseModel):
     meta: EmployeesPageMeta
 
 
+class UniqueCheckResult(BaseModel):
+    """Response from the uniqueness validation endpoint."""
+
+    valid: bool
+
+
 class EmployeePersonalDetails(BaseModel):
     """Employee's personal details model."""
 

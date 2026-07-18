@@ -15,6 +15,7 @@ from portals.orange_hrm.models import (
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
+    UniqueCheckResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -210,13 +211,13 @@ class OrangeHRMClient:
         ) as response:
             response.raise_for_status()
             data = await response.json()
-            try:
-                return bool(data["data"]["valid"])
-            except KeyError as exc:
-                raise OrangeHRMUnexpectedDataError(
-                    "employee id check response does not have one or "
-                    "more required keys",
-                ) from exc
+
+        try:
+            return UniqueCheckResult.model_validate(data["data"]).valid
+        except (KeyError, ValidationError) as exc:
+            raise OrangeHRMUnexpectedDataError(
+                "employee id check response does not have one or more required keys",
+            ) from exc
 
     async def fetch_suggested_new_employee_id(self) -> str:
         """Fetch suggested unused employee id unused."""
