@@ -3,12 +3,12 @@
 import json
 import logging
 from http import HTTPStatus
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import aiohttp
 from bs4 import BeautifulSoup
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
@@ -19,6 +19,8 @@ from portals.orange_hrm.models import (
     EmployeeSummary,
     UniqueCheckData,
 )
+
+T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,40 @@ class OrangeHRMClient:
         return urlunsplit(
             (self._url_parts.scheme, self._url_parts.netloc, path, query_str, None),
         )
+
+    async def _api_call(
+        self,
+        method: str,
+        path: str,
+        response_type: type[T],
+        *,
+        query: dict | None = None,
+        json_body: dict | None = None,
+    ) -> T:
+        """Make a JSON API call, check for errors, and validate the response."""
+        async with self._session.request(
+            method,
+            self._url(path, query),
+            json=json_body,
+        ) as response:
+            try:
+                response.raise_for_status()
+            except aiohttp.ClientResponseError as exc:
+                raise OrangeHRMRegularError(
+                    f"{method} {path} failed with status {exc.status}",
+                ) from exc
+            data = await response.json()
+
+        if error := data.get("error"):
+            error_msg = error.get("message") if isinstance(error, dict) else str(error)
+            raise OrangeHRMRegularError(f"{method} {path} error: {error_msg}")
+
+        try:
+            return response_type.model_validate(data)
+        except ValidationError as exc:
+            raise OrangeHRMUnexpectedDataError(
+                f"unexpected response shape from {method} {path}",
+            ) from exc
 
     async def _get_token(self) -> str:
         logger.debug("Fetching login page...")
@@ -135,21 +171,12 @@ class OrangeHRMClient:
             raise ValueError("offset must be non-negative")
 
         logger.debug(f"Fetching employees page: {limit=}, {offset=}")
-        async with self._session.get(
-            self._url(self.employees_path, {"limit": limit, "offset": offset}),
-        ) as response:
-            if response.status != HTTPStatus.OK:
-                raise OrangeHRMUnexpectedDataError(
-                    f"employee list returned unexpected status {response.status}",
-                )
-            data = await response.json()
-
-        try:
-            return EmployeesPage.model_validate(data)
-        except ValidationError as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "employee page does not have one of the required fields",
-            ) from exc
+        return await self._api_call(
+            "GET",
+            self.employees_path,
+            EmployeesPage,
+            query={"limit": limit, "offset": offset},
+        )
 
     async def fetch_all_employees(
         self,
@@ -179,47 +206,29 @@ class OrangeHRMClient:
 
     async def fetch_employee(self, employee_id: int) -> EmployeeSummary:
         """Fetch single employee data from OrangeHRM employee directory."""
-        async with self._session.get(
-            self._url(
+        return (
+            await self._api_call(
+                "GET",
                 f"/web/index.php/api/v2/directory/employees/{employee_id}",
-                {"model": "detailed"},
-            ),
-        ) as response:
-            data = await response.json()
-
-        if error := data.get("error"):
-            raise OrangeHRMRegularError(
-                f"Error fetching employee {employee_id}: {error}",
+                ApiResponse[EmployeeSummary],
+                query={"model": "detailed"},
             )
-
-        try:
-            return EmployeeSummary.model_validate(data["data"])
-        except (KeyError, ValidationError) as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "employee dict does not contain required keys",
-            ) from exc
+        ).data
 
     async def is_employee_id_free(self, employee_id: str) -> bool:
         """Test whether employee id is already used in OrangeHRM."""
-        async with self._session.get(
-            self._url(
+        return (
+            await self._api_call(
+                "GET",
                 "/web/index.php/api/v2/core/validation/unique",
-                {
+                ApiResponse[UniqueCheckData],
+                query={
                     "value": employee_id,
                     "entityName": "Employee",
                     "attributeName": "employeeId",
                 },
-            ),
-        ) as response:
-            response.raise_for_status()
-            data = await response.json()
-
-        try:
-            return ApiResponse[UniqueCheckData].model_validate(data).data.valid
-        except ValidationError as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "employee id check response does not have one or more required keys",
-            ) from exc
+            )
+        ).data.valid
 
     async def fetch_suggested_new_employee_id(self) -> str:
         """Fetch suggested unused employee id unused."""
@@ -244,31 +253,20 @@ class OrangeHRMClient:
 
         employee_id = await self.fetch_suggested_new_employee_id()
 
-        async with self._session.post(
-            self._url("/web/index.php/api/v2/pim/employees"),
-            json={
-                "firstName": first_name,
-                "middleName": middle_name,
-                "lastName": last_name,
-                "empPicture": None,
-                "employeeId": str(employee_id),
-            },
-        ) as response:
-            try:
-                response.raise_for_status()
-            except Exception as exc:
-                raise OrangeHRMRegularError("error creating employee") from exc
-
-            data = await response.json()
-
-        try:
-            emp_number = (
-                ApiResponse[CreateEmployeeData].model_validate(data).data.emp_number
+        emp_number = (
+            await self._api_call(
+                "POST",
+                "/web/index.php/api/v2/pim/employees",
+                ApiResponse[CreateEmployeeData],
+                json_body={
+                    "firstName": first_name,
+                    "middleName": middle_name,
+                    "lastName": last_name,
+                    "empPicture": None,
+                    "employeeId": str(employee_id),
+                },
             )
-        except ValidationError as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "unexpected response on creating employee",
-            ) from exc
+        ).data.emp_number
 
         logger.debug(f"Created employee {emp_number}")
         return emp_number
@@ -277,23 +275,14 @@ class OrangeHRMClient:
         """Delete employees with a given numbers."""
 
         logger.debug(f"Deleting employees {employee_nums}")
-        async with self._session.delete(
-            self._url("/web/index.php/api/v2/pim/employees"),
-            json={"ids": employee_nums},
-        ) as response:
-            try:
-                response.raise_for_status()
-            except Exception as exc:
-                raise OrangeHRMRegularError("error deleting employee") from exc
-
-            data = await response.json()
-
-        try:
-            deleted_nums = ApiResponse[list[int]].model_validate(data).data
-        except ValidationError as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "unexpected response on deleting employees",
-            ) from exc
+        deleted_nums = (
+            await self._api_call(
+                "DELETE",
+                "/web/index.php/api/v2/pim/employees",
+                ApiResponse[list[int]],
+                json_body={"ids": employee_nums},
+            )
+        ).data
 
         if sorted(employee_nums) != sorted(deleted_nums):
             raise OrangeHRMUnexpectedDataError(
@@ -306,29 +295,13 @@ class OrangeHRMClient:
         employee_num: int,
     ) -> EmployeePersonalDetails:
         """Fetch employee's personal details by employee number."""
-        async with self._session.get(
-            self._url(
+        return (
+            await self._api_call(
+                "GET",
                 f"/web/index.php/api/v2/pim/employees/{employee_num}/personal-details",
-            ),
-        ) as response:
-            data = await response.json()
-
-        if error := data.get("error"):
-            error_msg = str(error)
-            if isinstance(error, dict):
-                error_msg = error.get("message") or error_msg
-
-            raise OrangeHRMRegularError(
-                f"Error fetching employee {employee_num}: {error}",
+                ApiResponse[EmployeePersonalDetails],
             )
-
-        try:
-            personal_data_raw = data["data"]
-            return EmployeePersonalDetails.model_validate(personal_data_raw)
-        except (KeyError, ValidationError) as exc:
-            raise OrangeHRMUnexpectedDataError(
-                "employee dict does not contain required keys",
-            ) from exc
+        ).data
 
     async def update_employee_personal_details(
         self,
@@ -336,25 +309,11 @@ class OrangeHRMClient:
         personal_details: EmployeePersonalDetails,
     ) -> EmployeePersonalDetails:
         """Update employee personal details."""
-
-        async with self._session.put(
-            self._url(
+        return (
+            await self._api_call(
+                "PUT",
                 f"/web/index.php/api/v2/pim/employees/{employee_num}/personal-details",
-            ),
-            json=personal_details.model_dump(by_alias=True),
-        ) as response:
-            try:
-                response.raise_for_status()
-                data = await response.json()
-            except Exception as exc:
-                raise OrangeHRMRegularError(
-                    "error updating employee {employee_num} personal details",
-                ) from exc
-
-            try:
-                return EmployeePersonalDetails.model_validate(data["data"])
-            except (KeyError, ValidationError) as exc:
-                raise OrangeHRMUnexpectedDataError(
-                    "unexpected response when updating "
-                    f"employee {employee_num} personal details",
-                ) from exc
+                ApiResponse[EmployeePersonalDetails],
+                json_body=personal_details.model_dump(by_alias=True),
+            )
+        ).data
