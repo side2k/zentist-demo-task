@@ -323,3 +323,61 @@ class OrangeHRMClient:
                     "reported list of deleted employees differs from the request. "
                     f"Requested {employee_nums}, reported {deleted_nums}",
                 )
+
+    async def fetch_employee_personal_details(
+        self,
+        employee_num: int,
+    ) -> EmployeePersonalDetails:
+        """Fetch employee's personal details by employee number."""
+        async with self._session.get(
+            self._url(
+                f"/web/index.php/api/v2/pim/employees/{employee_num}/personal-details",
+            ),
+        ) as response:
+            data = await response.json()
+
+        if error := data.get("error"):
+            error_msg = str(error)
+            if isinstance(error, dict):
+                error_msg = error.get("message") or error_msg
+
+            raise OrangeHRMRegularError(
+                f"Error fetching employee {employee_num}: {error}",
+            )
+
+        try:
+            personal_data_raw = data["data"]
+            return EmployeePersonalDetails.model_validate(personal_data_raw)
+        except (KeyError, ValidationError) as exc:
+            raise OrangeHRMUnexpectedDataError(
+                "employee dict does not contain required keys",
+            ) from exc
+
+    async def update_employee_personal_details(
+        self,
+        employee_num: int,
+        personal_details: EmployeePersonalDetails,
+    ) -> EmployeePersonalDetails:
+        """Update employee personal details."""
+
+        async with self._session.put(
+            self._url(
+                f"/web/index.php/api/v2/pim/employees/{employee_num}/personal-details",
+            ),
+            json=personal_details.model_dump(by_alias=True),
+        ) as response:
+            try:
+                response.raise_for_status()
+                data = await response.json()
+            except Exception as exc:
+                raise OrangeHRMRegularError(
+                    "error updating employee {employee_num} personal details",
+                ) from exc
+
+            try:
+                return EmployeePersonalDetails.model_validate(data["data"])
+            except (KeyError, ValidationError) as exc:
+                raise OrangeHRMUnexpectedDataError(
+                    "unexpected response when updating "
+                    f"employee {employee_num} personal details",
+                ) from exc
