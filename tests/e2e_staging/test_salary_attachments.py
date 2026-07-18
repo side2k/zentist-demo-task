@@ -1,9 +1,9 @@
-"""Read-path tests for salary attachments against the live OrangeHRM portal."""
+"""E2E tests for salary attachments against the live OrangeHRM portal."""
 
 import pytest
 
 from portals.orange_hrm.client import OrangeHRMClient
-from portals.orange_hrm.models import SalaryAttachment
+from portals.orange_hrm.models import SalaryAttachment, SalaryAttachmentUpload
 
 pytestmark = pytest.mark.e2e_staging
 
@@ -45,3 +45,26 @@ async def test_fetch_all_salary_attachments(
 
     assert len(attachments) == total
     assert all(isinstance(a, SalaryAttachment) for a in attachments)
+
+
+async def test_add_salary_attachment(
+    orange_hrm_client: OrangeHRMClient,
+    orange_hrm_employee: int,
+) -> None:
+    """Uploading a salary attachment increases the total count by one."""
+    before = await orange_hrm_client.fetch_all_salary_attachments(orange_hrm_employee)
+
+    content = b"some salary\nline 2\nlast line\n"
+    upload = SalaryAttachmentUpload.from_bytes("salary.txt", content)
+    added = await orange_hrm_client.add_salary_attachment(
+        orange_hrm_employee,
+        upload,
+        description="some comment",
+    )
+
+    after = await orange_hrm_client.fetch_all_salary_attachments(orange_hrm_employee)
+
+    assert len(after) == len(before) + 1
+    assert added.filename == "salary.txt"
+    assert added.size == len(content)
+    assert any(a.id == added.id for a in after)

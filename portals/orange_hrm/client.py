@@ -21,6 +21,7 @@ from portals.orange_hrm.models import (
     EmployeeSummary,
     SalaryAttachment,
     SalaryAttachmentsPage,
+    SalaryAttachmentUpload,
     UniqueCheckData,
 )
 
@@ -424,6 +425,25 @@ class OrangeHRMClient:
             SalaryAttachmentsPage,
             query={"limit": limit, "offset": offset},
         )
+
+    async def add_salary_attachment(
+        self,
+        employee_num: int,
+        attachment: SalaryAttachmentUpload,
+        description: str = "",
+    ) -> SalaryAttachment:
+        """Upload a salary attachment for an employee."""
+        return (
+            await self._api_call(
+                "POST",
+                f"/web/index.php/api/v2/pim/employees/{employee_num}/screen/salary/attachments",
+                ApiResponse[SalaryAttachment],
+                json_body={
+                    "attachment": attachment.model_dump(),
+                    "description": description,
+                },
+            )
+        ).data
 
     async def fetch_all_salary_attachments(
         self,

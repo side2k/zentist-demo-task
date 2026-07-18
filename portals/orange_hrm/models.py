@@ -1,5 +1,6 @@
 """Pydantic models for OrangeHRM API responses."""
 
+import base64
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
@@ -86,6 +87,25 @@ class EmployeesPage(ApiResponse[list[EmployeeSummary]]):
     """A single page from the employee directory endpoint."""
 
     meta: EmployeesPageMeta
+
+
+class SalaryAttachmentUpload(BaseModel):
+    """Attachment payload for the salary attachment upload endpoint."""
+
+    name: str
+    # text/plain is hardcoded for demo task purposes
+    type: str = "text/plain"
+    size: int
+    base64: str
+
+    @classmethod
+    def from_bytes(cls, filename: str, content: bytes) -> "SalaryAttachmentUpload":
+        """Build an upload payload from raw bytes."""
+        return cls(
+            name=filename,
+            size=len(content),
+            base64=base64.b64encode(content).decode(),
+        )
 
 
 class SalaryAttachment(BaseModel):
