@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
+    CreateEmployeeResult,
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
@@ -259,15 +260,15 @@ class OrangeHRMClient:
 
             data = await response.json()
 
-            try:
-                employee_num = data["data"]["empNumber"]
-            except KeyError as exc:
-                raise OrangeHRMUnexpectedDataError(
-                    "unexpected response on creating employee",
-                ) from exc
+        try:
+            emp_number = CreateEmployeeResult.model_validate(data["data"]).emp_number
+        except (KeyError, ValidationError) as exc:
+            raise OrangeHRMUnexpectedDataError(
+                "unexpected response on creating employee",
+            ) from exc
 
-        logger.debug(f"Created employee {employee_num}")
-        return employee_num
+        logger.debug(f"Created employee {emp_number}")
+        return emp_number
 
     async def delete_employees(self, employee_nums: list[int]) -> None:
         """Delete employees with a given numbers."""

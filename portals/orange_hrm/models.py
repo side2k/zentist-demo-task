@@ -66,6 +66,13 @@ class EmployeesPage(BaseModel):
     meta: EmployeesPageMeta
 
 
+class CreateEmployeeResult(BaseModel):
+    """Response data when creating an employee."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    emp_number: int
+
+
 class UniqueCheckResult(BaseModel):
     """Response from the uniqueness validation endpoint."""
 
