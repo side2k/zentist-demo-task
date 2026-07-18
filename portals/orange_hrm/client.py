@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
     CreateEmployeeResult,
+    DeleteEmployeesResult,
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
@@ -285,18 +286,18 @@ class OrangeHRMClient:
 
             data = await response.json()
 
-            try:
-                deleted_nums = [int(emp_num) for emp_num in data["data"]]
-            except KeyError as exc:
-                raise OrangeHRMUnexpectedDataError(
-                    "unexpected response on deleting employees",
-                ) from exc
+        try:
+            deleted_nums = DeleteEmployeesResult.model_validate(data).data
+        except ValidationError as exc:
+            raise OrangeHRMUnexpectedDataError(
+                "unexpected response on deleting employees",
+            ) from exc
 
-            if sorted(employee_nums) != sorted(deleted_nums):
-                raise OrangeHRMUnexpectedDataError(
-                    "reported list of deleted employees differs from the request. "
-                    f"Requested {employee_nums}, reported {deleted_nums}",
-                )
+        if sorted(employee_nums) != sorted(deleted_nums):
+            raise OrangeHRMUnexpectedDataError(
+                "reported list of deleted employees differs from the request. "
+                f"Requested {employee_nums}, reported {deleted_nums}",
+            )
 
     async def fetch_employee_personal_details(
         self,

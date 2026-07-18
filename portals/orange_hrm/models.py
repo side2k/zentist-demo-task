@@ -66,6 +66,12 @@ class EmployeesPage(BaseModel):
     meta: EmployeesPageMeta
 
 
+class DeleteEmployeesResult(BaseModel):
+    """Response data when deleting employees."""
+
+    data: list[int]
+
+
 class CreateEmployeeResult(BaseModel):
     """Response data when creating an employee."""
 
