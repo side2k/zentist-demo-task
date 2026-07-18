@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
     EmployeePersonalDetails,
+    EmployeesPage,
+    EmployeeSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,7 +124,7 @@ class OrangeHRMClient:
         self,
         limit: int = 100,
         offset: int = 0,
-    ) -> dict:
+    ) -> EmployeesPage:
         """Fetch a single page from the OrangeHRM employee directory."""
         if limit <= 0:
             raise ValueError("limit must be positive")
@@ -139,34 +141,29 @@ class OrangeHRMClient:
                 )
             data = await response.json()
 
-        if not isinstance(data, dict):
-            raise OrangeHRMUnexpectedDataError("employee page must be an object")
-
         try:
-            _ = data["data"], data["meta"], data["meta"]["total"]
-        except KeyError as exc:
+            return EmployeesPage.model_validate(data)
+        except ValidationError as exc:
             raise OrangeHRMUnexpectedDataError(
                 "employee page does not have one of the required fields",
             ) from exc
-        return data
 
     async def fetch_all_employees(
         self,
         page_size: int = 100,
-    ) -> list[dict]:
+    ) -> list[EmployeeSummary]:
         """Fetch all employees from the OrangeHRM employee directory."""
         if page_size <= 0:
             raise ValueError("page_size must be positive")
 
-        employees: list[dict] = []
+        employees: list[EmployeeSummary] = []
         offset = 0
         page_total: int | None = None
         while page_total is None or page_total >= page_size:
             page = await self.fetch_employees_page(limit=page_size, offset=offset)
-            total_reported = page["meta"]["total"]
-            page_employees = page["data"]
-            page_total = len(page_employees)
-            employees.extend(page_employees)
+            total_reported = page.meta.total
+            page_total = len(page.data)
+            employees.extend(page.data)
 
             if len(employees) >= total_reported:
                 break
