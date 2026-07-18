@@ -47,20 +47,32 @@ class ContactInfo(BaseModel):
     work_telephone: str | None = None
 
 
-class EmployeeSummary(BaseModel):
-    """Employee summary as returned by the directory endpoint."""
+class BaseEmployee(BaseModel):
+    """Base class for several employee models to keep them DRY."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    emp_number: int
     first_name: str
     last_name: str
     middle_name: str = ""
+
+
+class EmployeeSummary(BaseEmployee):
+    """Employee summary as returned by the directory endpoint."""
+
+    emp_number: int
     termination_id: int | None = None
     job_title: JobTitle = JobTitle()
     subunit: EmployeeSubunit = EmployeeSubunit()
     location: EmployeeLocation = EmployeeLocation()
     contact_info: ContactInfo = ContactInfo()
+
+
+class EmployeeCreateRequest(BaseEmployee):
+    """Employee model for the creation request."""
+
+    emp_picture: None
+    employee_id: str
 
 
 class EmployeesPageMeta(BaseModel):

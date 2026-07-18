@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from faker import Faker
 
 from portals.orange_hrm.client import OrangeHRMClient
+from portals.orange_hrm.models import EmployeeCreateRequest
 
 load_dotenv()
 
@@ -52,10 +53,15 @@ async def orange_hrm_employee(
     faker: Faker,
     orange_hrm_client: OrangeHRMClient,
 ) -> AsyncIterator[int]:
+    employee_id = await orange_hrm_client.fetch_suggested_new_employee_id()
     employee_number = await orange_hrm_client.create_employee(
-        faker.first_name(),
-        faker.first_name(),
-        faker.last_name(),
+        EmployeeCreateRequest(
+            first_name=faker.first_name(),
+            middle_name=faker.first_name(),
+            last_name=faker.last_name(),
+            employee_id=employee_id,
+            emp_picture=None,
+        ),
     )
     yield employee_number
 

@@ -14,6 +14,7 @@ from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
     ApiResponse,
     CreateEmployeeData,
+    EmployeeCreateRequest,
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
@@ -243,28 +244,15 @@ class OrangeHRMClient:
 
         raise OrangeHRMUnexpectedDataError("Error fetching suggested new employee id")
 
-    async def create_employee(
-        self,
-        first_name: str,
-        middle_name: str,
-        last_name: str,
-    ) -> int:
+    async def create_employee(self, employee: EmployeeCreateRequest) -> int:
         """Create new employee with and return its number."""
-
-        employee_id = await self.fetch_suggested_new_employee_id()
 
         emp_number = (
             await self._api_call(
                 "POST",
                 "/web/index.php/api/v2/pim/employees",
                 ApiResponse[CreateEmployeeData],
-                json_body={
-                    "firstName": first_name,
-                    "middleName": middle_name,
-                    "lastName": last_name,
-                    "empPicture": None,
-                    "employeeId": str(employee_id),
-                },
+                json_body=employee.model_dump(by_alias=True),
             )
         ).data.emp_number
 
