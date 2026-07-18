@@ -302,6 +302,32 @@ class OrangeHRMClient:
         logger.debug(f"Created employee {emp_number}")
         return emp_number
 
+    async def create_employee_with_retry(
+        self,
+        employee: EmployeeCreateRequest,
+        max_retries: int = 3,
+    ) -> int:
+        """Retry creating employee multiple times.
+
+        For every retry(including 1st one) new suggested value for employeeId is
+        fetched. So, any value passed in
+        employee.employee_id will be overriden.
+        """
+        retries = max_retries
+        while retries >= 0:
+            retries -= 1
+            try:
+                employee_id = await self.fetch_suggested_new_employee_id()
+                employee = employee.model_copy(update={"employee_id": employee_id})
+
+                return await self.create_employee(employee)
+            except OrangeHRMRegularError as exc:
+                if exc.status != HTTPStatus.UNPROCESSABLE_ENTITY:
+                    raise
+        raise OrangeHRMRegularError(
+            f"couldn't create employee with unique id after {max_retries} retries",
+        )
+
     async def delete_employees(self, employee_nums: list[int]) -> None:
         """Delete employees with a given numbers."""
 

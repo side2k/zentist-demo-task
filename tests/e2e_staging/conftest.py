@@ -53,13 +53,12 @@ async def orange_hrm_employee(
     faker: Faker,
     orange_hrm_client: OrangeHRMClient,
 ) -> AsyncIterator[int]:
-    employee_id = await orange_hrm_client.fetch_suggested_new_employee_id()
-    employee_number = await orange_hrm_client.create_employee(
+    employee_number = await orange_hrm_client.create_employee_with_retry(
         EmployeeCreateRequest(
             first_name=faker.first_name(),
             middle_name=faker.first_name(),
             last_name=faker.last_name(),
-            employee_id=employee_id,
+            employee_id="",  # create_employee_with_retry will override it anyway
             emp_picture=None,
         ),
     )
