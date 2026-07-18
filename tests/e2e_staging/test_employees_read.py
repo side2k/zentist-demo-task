@@ -3,7 +3,7 @@
 import pytest
 
 from portals.orange_hrm.client import OrangeHRMClient
-from portals.orange_hrm.models import EmployeeSummary
+from portals.orange_hrm.models import EmployeeSummary, EmploymentStatus
 
 pytestmark = pytest.mark.e2e_staging
 
@@ -55,3 +55,13 @@ async def test_fetch_employee(orange_hrm_client: OrangeHRMClient) -> None:
 
     assert isinstance(employee, EmployeeSummary)
     assert employee.emp_number == emp_number
+
+
+async def test_fetch_all_employment_statuses(
+    orange_hrm_client: OrangeHRMClient,
+) -> None:
+
+    statuses = await orange_hrm_client.fetch_all_employment_statuses()
+
+    assert len(statuses) > 0
+    assert all(isinstance(status, EmploymentStatus) for status in statuses)

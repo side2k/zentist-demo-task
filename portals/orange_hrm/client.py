@@ -19,6 +19,8 @@ from portals.orange_hrm.models import (
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
+    EmploymentStatus,
+    EmploymentStatusesPage,
     SalaryAttachment,
     SalaryAttachmentsPage,
     SalaryAttachmentUpload,
@@ -496,3 +498,28 @@ class OrangeHRMClient:
                 ) from exc
 
             return await response.content.read()
+
+    async def fetch_all_employment_statuses(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[EmploymentStatus]:
+        """Fetch a single page of employment statuses.
+
+        Since its a demo task, there is not much point in implementing a multi-page
+        fetching here.
+        """
+
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+
+        return (
+            await self._api_call(
+                "GET",
+                "/web/index.php/api/v2/admin/employment-statuses",
+                EmploymentStatusesPage,
+                query={"limit": limit, "offset": offset},
+            )
+        ).data

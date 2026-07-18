@@ -178,11 +178,25 @@ class JobSpecificationAttachment(BaseModel):
 
 
 class EmploymentStatus(BaseModel):
-    """Employment status reference on an employee job details record."""
+    """Employment status reference on an employment status record."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     id: int | None = None
     name: str | None = None
+
+
+class EmploymentStatusesPageMeta(BaseModel):
+    """Metadata returned with a employement statuses page."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    total: int
+
+
+class EmploymentStatusesPage(ApiResponse[list[EmploymentStatus]]):
+    """A single page from the employement statuses endpoint."""
+
+    meta: EmploymentStatusesPageMeta
 
 
 class JobCategory(BaseModel):
