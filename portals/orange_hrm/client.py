@@ -174,7 +174,7 @@ class OrangeHRMClient:
 
         return employees
 
-    async def fetch_employee(self, employee_id: int) -> dict[str, Any]:
+    async def fetch_employee(self, employee_id: int) -> EmployeeSummary:
         """Fetch single employee data from OrangeHRM employee directory."""
         async with self._session.get(
             self._url(
@@ -185,24 +185,16 @@ class OrangeHRMClient:
             data = await response.json()
 
         if error := data.get("error"):
-            error_msg = str(error)
-            if isinstance(error, dict):
-                error_msg = error.get("message") or error_msg
-
             raise OrangeHRMRegularError(
                 f"Error fetching employee {employee_id}: {error}",
             )
 
         try:
-            employee_data = data["data"]
-            for required_key in ["empNumber", "lastName", "firstName", "middleName"]:
-                _ = employee_data[required_key]
-        except KeyError as exc:
+            return EmployeeSummary.model_validate(data["data"])
+        except (KeyError, ValidationError) as exc:
             raise OrangeHRMUnexpectedDataError(
                 "employee dict does not contain required keys",
             ) from exc
-
-        return data["data"]
 
     async def is_employee_id_free(self, employee_id: str) -> bool:
         """Test whether employee id is already used in OrangeHRM."""

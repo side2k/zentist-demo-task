@@ -37,6 +37,5 @@ async def test_fetch_employee(orange_hrm_client: OrangeHRMClient) -> None:
 
     employee = await orange_hrm_client.fetch_employee(emp_number)
 
-    assert employee["empNumber"] == emp_number
-    for key in ("empNumber", "firstName", "middleName", "lastName"):
-        assert key in employee
+    assert isinstance(employee, EmployeeSummary)
+    assert employee.emp_number == emp_number
