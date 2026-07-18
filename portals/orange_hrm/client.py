@@ -8,10 +8,12 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import aiohttp
 from bs4 import BeautifulSoup
-from pydantic import BaseModel, ConfigDict, ValidationError
-from pydantic.alias_generators import to_camel
+from pydantic import ValidationError
 
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
+from portals.orange_hrm.models import (
+    EmployeePersonalDetails,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,25 +29,6 @@ class OrangeHRMRegularError(RecoverablePortalError):
     """Errors that do not mean we should abort doing what we doing - e.g.
     invalid object id.
     """  # noqa: D205
-
-
-class EmployeePersonalDetails(BaseModel):
-    """Employee's personal details model."""
-
-    model_config = ConfigDict(
-        alias_generator=to_camel,  # first_name -> firstName
-        populate_by_name=True,  # allow constructing by snake_case in Python
-    )
-
-    first_name: str
-    last_name: str
-    middle_name: str = ""
-    employee_id: str = ""
-    other_id: str = ""
-    driving_license_no: str = ""
-    driving_license_expired_date: str | None = None
-    gender: int | None = None
-    birthday: str | None = None
 
 
 DEFAULT_CONFIG = {
