@@ -47,7 +47,7 @@ async def test_fetch_all_salary_attachments(
     assert all(isinstance(a, SalaryAttachment) for a in attachments)
 
 
-async def test_add_salary_attachment(
+async def test_add_and_fetch_salary_attachment(
     orange_hrm_client: OrangeHRMClient,
     orange_hrm_employee: int,
 ) -> None:
@@ -68,3 +68,9 @@ async def test_add_salary_attachment(
     assert added.filename == "salary.txt"
     assert added.size == len(content)
     assert any(a.id == added.id for a in after)
+
+    downloaded_bytes = await orange_hrm_client.fetch_employee_attachment(
+        orange_hrm_employee,
+        added.id,
+    )
+    assert downloaded_bytes == content

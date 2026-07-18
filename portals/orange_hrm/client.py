@@ -475,3 +475,24 @@ class OrangeHRMClient:
         logger.debug(f"{page_total=}, {offset=}, {total_reported=}")
 
         return attachments
+
+    async def fetch_employee_attachment(
+        self,
+        employee_num: int,
+        attachment_id: int,
+    ) -> bytes:
+        """Download employee [salary] attachment."""
+
+        async with self._session.get(
+            self._url(
+                f"/web/index.php/pim/viewAttachment/empNumber/{employee_num}/attachId/{attachment_id}"  # noqa: COM812
+            ),
+        ) as response:
+            try:
+                response.raise_for_status()
+            except aiohttp.ClientResponseError as exc:
+                raise OrangeHRMRegularError(
+                    "error fetching employee attachment",
+                ) from exc
+
+            return await response.content.read()
