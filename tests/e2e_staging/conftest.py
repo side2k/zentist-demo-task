@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 import aiohttp
 import pytest
 from dotenv import load_dotenv
+from faker import Faker
 
 from portals.orange_hrm.client import OrangeHRMClient
 
@@ -44,3 +45,19 @@ async def orange_hrm_client(
     client = OrangeHRMClient(session)
     await client.login(*orange_hrm_credentials)
     return client
+
+
+@pytest.fixture
+async def orange_hrm_employee(
+    faker: Faker,
+    orange_hrm_client: OrangeHRMClient,
+) -> AsyncIterator[int]:
+    employee_number = await orange_hrm_client.create_employee(
+        faker.first_name(),
+        faker.first_name(),
+        faker.last_name(),
+    )
+    yield employee_number
+
+    # cleanup
+    await orange_hrm_client.delete_employees([employee_number])
