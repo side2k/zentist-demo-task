@@ -12,12 +12,12 @@ from pydantic import ValidationError
 
 from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
-    CreateEmployeeResult,
-    DeleteEmployeesResult,
+    ApiResponse,
+    CreateEmployeeData,
     EmployeePersonalDetails,
     EmployeesPage,
     EmployeeSummary,
-    UniqueCheckResult,
+    UniqueCheckData,
 )
 
 logger = logging.getLogger(__name__)
@@ -215,8 +215,8 @@ class OrangeHRMClient:
             data = await response.json()
 
         try:
-            return UniqueCheckResult.model_validate(data["data"]).valid
-        except (KeyError, ValidationError) as exc:
+            return ApiResponse[UniqueCheckData].model_validate(data).data.valid
+        except ValidationError as exc:
             raise OrangeHRMUnexpectedDataError(
                 "employee id check response does not have one or more required keys",
             ) from exc
@@ -262,8 +262,10 @@ class OrangeHRMClient:
             data = await response.json()
 
         try:
-            emp_number = CreateEmployeeResult.model_validate(data["data"]).emp_number
-        except (KeyError, ValidationError) as exc:
+            emp_number = (
+                ApiResponse[CreateEmployeeData].model_validate(data).data.emp_number
+            )
+        except ValidationError as exc:
             raise OrangeHRMUnexpectedDataError(
                 "unexpected response on creating employee",
             ) from exc
@@ -287,7 +289,7 @@ class OrangeHRMClient:
             data = await response.json()
 
         try:
-            deleted_nums = DeleteEmployeesResult.model_validate(data).data
+            deleted_nums = ApiResponse[list[int]].model_validate(data).data
         except ValidationError as exc:
             raise OrangeHRMUnexpectedDataError(
                 "unexpected response on deleting employees",

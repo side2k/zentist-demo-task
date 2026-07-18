@@ -1,7 +1,17 @@
 """Pydantic models for OrangeHRM API responses."""
 
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
+
+T = TypeVar("T")
+
+
+class ApiResponse(BaseModel, Generic[T]):
+    """Generic wrapper for OrangeHRM API responses with shape {data, meta, rels}."""
+
+    data: T
 
 
 class EmployeeSubunit(BaseModel):
@@ -59,28 +69,21 @@ class EmployeesPageMeta(BaseModel):
     total: int
 
 
-class EmployeesPage(BaseModel):
+class EmployeesPage(ApiResponse[list[EmployeeSummary]]):
     """A single page from the employee directory endpoint."""
 
-    data: list[EmployeeSummary]
     meta: EmployeesPageMeta
 
 
-class DeleteEmployeesResult(BaseModel):
-    """Response data when deleting employees."""
-
-    data: list[int]
-
-
-class CreateEmployeeResult(BaseModel):
-    """Response data when creating an employee."""
+class CreateEmployeeData(BaseModel):
+    """Inner data object returned when creating an employee."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     emp_number: int
 
 
-class UniqueCheckResult(BaseModel):
-    """Response from the uniqueness validation endpoint."""
+class UniqueCheckData(BaseModel):
+    """Inner data object from the uniqueness validation endpoint."""
 
     valid: bool
 
