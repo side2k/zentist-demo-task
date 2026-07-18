@@ -41,6 +41,17 @@ class OrangeHRMRegularError(RecoverablePortalError):
     invalid object id.
     """  # noqa: D205
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        data: dict | None = None,
+    ):
+        super().__init__(message)
+        self.status = status
+        self.data = data
+
 
 DEFAULT_CONFIG = {
     "base_url": "https://opensource-demo.orangehrmlive.com/",
@@ -94,16 +105,31 @@ class OrangeHRMClient:
             json=json_body,
         ) as response:
             try:
+                data = await response.json()
+            except (aiohttp.ContentTypeError, json.JSONDecodeError):
+                data = None
+            status = response.status
+
+            if isinstance(data, dict) and (error := data.get("error")):
+                error_msg, error_data = (
+                    (error.get("message"), error.get("data"))
+                    if isinstance(error, dict)
+                    else (str(error), None)
+                )
+
+                raise OrangeHRMRegularError(
+                    f"{method} {path} error: {error_msg}",
+                    status=status,
+                    data=error_data,
+                )
+
+            try:
                 response.raise_for_status()
             except aiohttp.ClientResponseError as exc:
                 raise OrangeHRMRegularError(
                     f"{method} {path} failed with status {exc.status}",
+                    status=exc.status,
                 ) from exc
-            data = await response.json()
-
-        if error := data.get("error"):
-            error_msg = error.get("message") if isinstance(error, dict) else str(error)
-            raise OrangeHRMRegularError(f"{method} {path} error: {error_msg}")
 
         try:
             return response_type.model_validate(data)
