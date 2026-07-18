@@ -17,6 +17,22 @@ async def test_fetch_employees_page(orange_hrm_client: OrangeHRMClient) -> None:
     assert all(isinstance(e, EmployeeSummary) for e in page.data)
 
 
+async def test_fetch_employees_page_detailed(
+    orange_hrm_client: OrangeHRMClient,
+) -> None:
+    """A single directory page returns detailed employees and a total count."""
+    page = await orange_hrm_client.fetch_employees_page(
+        limit=50,
+        offset=0,
+        use_detailed_model=True,
+    )
+
+    assert isinstance(page.meta.total, int)
+    assert len(page.data) <= 50
+    assert all(isinstance(e, EmployeeSummary) for e in page.data)
+    assert any(lambda e: e.contact_info.id is not None for e in page.data)
+
+
 async def test_fetch_all_employees_paginates(
     orange_hrm_client: OrangeHRMClient,
 ) -> None:

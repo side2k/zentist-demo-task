@@ -164,6 +164,8 @@ class OrangeHRMClient:
         self,
         limit: int = 100,
         offset: int = 0,
+        *,
+        use_detailed_model: bool = False,
     ) -> EmployeesPage:
         """Fetch a single page from the OrangeHRM employee directory."""
         if limit <= 0:
@@ -171,17 +173,25 @@ class OrangeHRMClient:
         if offset < 0:
             raise ValueError("offset must be non-negative")
 
-        logger.debug(f"Fetching employees page: {limit=}, {offset=}")
+        logger.debug(
+            f"Fetching employees page: {limit=}, {offset=}, {use_detailed_model=}",
+        )
+        query: dict[str, str | int] = {"limit": limit, "offset": offset}
+        if use_detailed_model:
+            query["model"] = "detailed"
+
         return await self._api_call(
             "GET",
             self.employees_path,
             EmployeesPage,
-            query={"limit": limit, "offset": offset},
+            query=query,
         )
 
     async def fetch_all_employees(
         self,
         page_size: int = 100,
+        *,
+        use_detailed_model: bool = False,
     ) -> list[EmployeeSummary]:
         """Fetch all employees from the OrangeHRM employee directory."""
         if page_size <= 0:
@@ -191,7 +201,11 @@ class OrangeHRMClient:
         offset = 0
         page_total: int | None = None
         while page_total is None or page_total >= page_size:
-            page = await self.fetch_employees_page(limit=page_size, offset=offset)
+            page = await self.fetch_employees_page(
+                limit=page_size,
+                offset=offset,
+                use_detailed_model=use_detailed_model,
+            )
             total_reported = page.meta.total
             page_total = len(page.data)
             employees.extend(page.data)
