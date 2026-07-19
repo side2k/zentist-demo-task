@@ -538,3 +538,36 @@ class OrangeHRMClient:
                 query={"limit": limit, "offset": offset},
             )
         ).data
+
+    async def create_employment_status(self, emp_status: EmploymentStatus) -> int:
+        """Create new employment status."""
+        response = await self._api_call(
+            "POST",
+            "/web/index.php/api/v2/admin/employment-statuses",
+            ApiResponse[EmploymentStatus],
+            json_body=emp_status.model_dump(by_alias=True, exclude={"id"}),
+        )
+
+        if response.data.id is None:
+            raise OrangeHRMUnexpectedDataError("status creation request returned no id")
+
+        return response.data.id
+
+    async def delete_employment_statuses(self, emp_statuses_ids: list[int]) -> None:
+        """Delete employment statuses with given ids."""
+
+        logger.debug(f"Deleting employment statuses {emp_statuses_ids}")
+        deleted_nums = (
+            await self._api_call(
+                "DELETE",
+                "/web/index.php/api/v2/admin/employment-statuses",
+                ApiResponse[list[int]],
+                json_body={"ids": emp_statuses_ids},
+            )
+        ).data
+
+        if sorted(emp_statuses_ids) != sorted(deleted_nums):
+            raise OrangeHRMUnexpectedDataError(
+                "reported list of deleted statuses differs from the request. "
+                f"Requested {emp_statuses_ids}, reported {deleted_nums}",
+            )
