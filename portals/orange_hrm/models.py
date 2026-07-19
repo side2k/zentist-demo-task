@@ -246,3 +246,39 @@ class EmployeeJobDetails(BaseModel):
             "locationId": self.location.id,
         }
         return {key: value for key, value in payload.items() if value is not None}
+
+
+class EmployeeContactDetails(BaseModel):
+    """Employee's contact details model."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    street1: str | None = ""
+    street2: str | None = ""
+    city: str | None = ""
+    province: str | None = ""
+    zip_code: str | None = None
+    home_telephone: str | None = None
+    work_telephone: str | None = None
+    mobile: str | None = None
+    work_email: str | None = None
+    other_email: str | None = None
+
+    def to_update_payload(self) -> dict:
+        """Build the flat payload accepted by the job-details PUT endpoint.
+
+        Fields with a None value are omitted.
+        """
+        payload = {
+            "street1": self.street1 or "",
+            "street2": self.street2 or "",
+            "city": self.city or "",
+            "province": self.province or "",
+            "zipCode": self.zip_code,
+            "homeTelephone": self.home_telephone,
+            "workTelephone": self.work_telephone or "",
+            "mobile": self.mobile,
+            "workEmail": self.work_email or "",
+            "otherEmail": self.other_email,
+        }
+        return {key: value for key, value in payload.items() if value is not None}

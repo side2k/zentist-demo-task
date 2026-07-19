@@ -103,3 +103,35 @@ async def test_employment_status_create_and_delete(
     assert not any(
         new_status in cleaned_statuses_names for new_status in new_statuses_names
     )
+
+
+async def test_employee_contact_details_update_and_fetch(
+    orange_hrm_client: OrangeHRMClient,
+    orange_hrm_employee: int,
+    faker: Faker,
+) -> None:
+
+    existing_contact_details = await orange_hrm_client.fetch_employee_contact_details(
+        orange_hrm_employee,
+    )
+
+    new_work_email = faker.email()
+    new_work_telephone = faker.basic_phone_number().replace("-", "")
+
+    assert new_work_email != existing_contact_details.work_email
+    assert new_work_telephone != existing_contact_details.work_telephone
+
+    new_contact_details = existing_contact_details.model_copy(
+        update={"work_email": new_work_email, "work_telephone": new_work_telephone},
+    )
+
+    await orange_hrm_client.update_employee_contact_details(
+        orange_hrm_employee,
+        new_contact_details,
+    )
+
+    refreshed_contact_details = await orange_hrm_client.fetch_employee_contact_details(
+        orange_hrm_employee,
+    )
+    assert refreshed_contact_details.work_email == new_work_email
+    assert refreshed_contact_details.work_telephone == new_work_telephone

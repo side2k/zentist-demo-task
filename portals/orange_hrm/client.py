@@ -14,6 +14,7 @@ from portals.errors import RecoverablePortalError, UnrecoverablePortalError
 from portals.orange_hrm.models import (
     ApiResponse,
     CreateEmployeeData,
+    EmployeeContactDetails,
     EmployeeCreateRequest,
     EmployeeJobDetails,
     EmployeePersonalDetails,
@@ -434,6 +435,34 @@ class OrangeHRMClient:
                 f"/web/index.php/api/v2/pim/employees/{employee_num}/job-details",
                 ApiResponse[EmployeeJobDetails],
                 json_body=job_details.to_update_payload(),
+            )
+        ).data
+
+    async def fetch_employee_contact_details(
+        self,
+        employee_num: int,
+    ) -> EmployeeContactDetails:
+        """Fetch employee's contact details by employee number."""
+        return (
+            await self._api_call(
+                "GET",
+                f"/web/index.php/api/v2/pim/employee/{employee_num}/contact-details",
+                ApiResponse[EmployeeContactDetails],
+            )
+        ).data
+
+    async def update_employee_contact_details(
+        self,
+        employee_num: int,
+        contact_details: EmployeeContactDetails,
+    ) -> EmployeeContactDetails:
+        """Update employee contact details."""
+        return (
+            await self._api_call(
+                "PUT",
+                f"/web/index.php/api/v2/pim/employee/{employee_num}/contact-details",
+                ApiResponse[EmployeeContactDetails],
+                json_body=contact_details.to_update_payload(),
             )
         ).data
 
