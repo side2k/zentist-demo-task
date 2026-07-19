@@ -35,8 +35,16 @@ logger = logging.getLogger(__name__)
 class OrangeHRMUnexpectedDataError(UnrecoverablePortalError):
     """Server's output changed means we most likely have to update the parsing code."""
 
-    def __init__(self, details: str):
+    def __init__(self, details: str, data: dict | None = None):
         super().__init__(f"OrangeHRM output data changed: {details}")
+        self.data = data
+
+    def __str__(self) -> str:  # noqa: D105
+        original_message = super().__str__()
+        if self.data:
+            return f"{original_message} (data: {self.data})"
+
+        return original_message
 
 
 class OrangeHRMRegularError(RecoverablePortalError):
@@ -54,6 +62,13 @@ class OrangeHRMRegularError(RecoverablePortalError):
         super().__init__(message)
         self.status = status
         self.data = data
+
+    def __str__(self) -> str:  # noqa: D105
+        original_message = super().__str__()
+        if self.data:
+            return f"{original_message} (data: {self.data})"
+
+        return original_message
 
 
 DEFAULT_CONFIG = {
@@ -154,6 +169,7 @@ class OrangeHRMClient:
         except ValidationError as exc:
             raise OrangeHRMUnexpectedDataError(
                 f"unexpected response shape from {method} {path}",
+                data={"errors": exc.errors()},
             ) from exc
 
     async def _get_token(self) -> str:
