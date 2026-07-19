@@ -58,6 +58,7 @@ class OrangeHRMRegularError(RecoverablePortalError):
 
 DEFAULT_CONFIG = {
     "base_url": "https://opensource-demo.orangehrmlive.com/",
+    "tracing_enabled": False,
 }
 
 
@@ -82,6 +83,10 @@ class OrangeHRMClient:
             full_config.update(config)
 
         self.base_url = full_config["base_url"]
+        self.tracing_enabled = full_config["tracing_enabled"]
+        logger.debug(
+            f"base_url={self.base_url}, tracing_enabled={self.tracing_enabled}",
+        )
 
         self._session = session
         self._url_parts = urlsplit(self.base_url)
@@ -102,6 +107,11 @@ class OrangeHRMClient:
         json_body: dict | None = None,
     ) -> T:
         """Make a JSON API call, check for errors, and validate the response."""
+
+        if self.tracing_enabled:
+            logger.debug(f"{method} {path}")
+            logger.debug(f"{json.dumps(json_body or {}, indent=2)}")
+
         async with self._session.request(
             method,
             self._url(path, query),
@@ -111,6 +121,11 @@ class OrangeHRMClient:
                 data = await response.json()
             except (aiohttp.ContentTypeError, json.JSONDecodeError):
                 data = None
+
+            if self.tracing_enabled:
+                logger.debug("Response:")
+                logger.debug(f"{json.dumps(data or {}, indent=2)}")
+
             status = response.status
 
             if isinstance(data, dict) and (error := data.get("error")):
