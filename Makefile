@@ -1,4 +1,4 @@
-.PHONY: test test-e2e-staging generate-demo-input run
+.PHONY: test test-e2e-staging generate-demo-input run migrate-db reset-db
 
 test:
 	poetry run pytest
@@ -11,3 +11,10 @@ generate-demo-input:
 
 run:
 	poetry run python run.py
+
+migrate-db:
+	poetry run alembic upgrade head
+
+reset-db:
+	rm -f db.sqlite
+	poetry run alembic upgrade head
