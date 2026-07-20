@@ -6,7 +6,7 @@ import pytest
 from faker import Faker
 
 from portals.orange_hrm.client import OrangeHRMClient
-from portals.orange_hrm.models import EmploymentStatus
+from portals.orange_hrm.models import EmploymentStatus, JobTitle
 
 pytestmark = pytest.mark.e2e_staging
 
@@ -102,6 +102,47 @@ async def test_employment_status_create_and_delete(
     }
     assert not any(
         new_status in cleaned_statuses_names for new_status in new_statuses_names
+    )
+
+
+async def test_job_title_create_and_delete(
+    orange_hrm_client: OrangeHRMClient,
+) -> None:
+    existing_job_titles = await orange_hrm_client.fetch_all_job_titles()
+
+    existing_job_titles_names = {jt.title for jt in existing_job_titles}
+
+    run_id = uuid4().hex[:8]
+    new_job_titles_names = [f"jobtitle-{run_id}-{i}" for i in range(3)]
+
+    assert not any(new in existing_job_titles_names for new in new_job_titles_names)
+
+    # create new job titles
+    for new_job_title_name in new_job_titles_names:
+        await orange_hrm_client.create_job_title(
+            JobTitle(title=new_job_title_name),
+        )
+
+    # check job titles were created
+    refreshed_job_titles = {
+        str(jt.title): jt.id or 0
+        for jt in await orange_hrm_client.fetch_all_job_titles()
+    }
+    refreshed_job_titles_names = refreshed_job_titles.keys()
+
+    assert all(new in refreshed_job_titles_names for new in new_job_titles_names)
+
+    # delete job titles we've created
+    new_job_titles_ids = [refreshed_job_titles[jt] for jt in new_job_titles_names]
+    await orange_hrm_client.delete_job_titles(new_job_titles_ids)
+
+    # ensure everything was cleaned up
+    cleaned_job_titles_names = {
+        jt.title for jt in await orange_hrm_client.fetch_all_job_titles()
+    }
+    assert not any(
+        new_job_title in cleaned_job_titles_names
+        for new_job_title in new_job_titles_names
     )
 
 

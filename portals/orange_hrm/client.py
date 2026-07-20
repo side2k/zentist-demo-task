@@ -22,6 +22,8 @@ from portals.orange_hrm.models import (
     EmployeeSummary,
     EmploymentStatus,
     EmploymentStatusesPage,
+    JobTitle,
+    JobTitlesPage,
     SalaryAttachment,
     SalaryAttachmentsPage,
     SalaryAttachmentUpload,
@@ -615,4 +617,64 @@ class OrangeHRMClient:
             raise OrangeHRMUnexpectedDataError(
                 "reported list of deleted statuses differs from the request. "
                 f"Requested {emp_statuses_ids}, reported {deleted_nums}",
+            )
+
+    async def fetch_all_job_titles(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[JobTitle]:
+        """Fetch a single page of job titles.
+
+        Since its a demo task, there is not much point in implementing a multi-page
+        fetching here.
+        """
+
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+
+        return (
+            await self._api_call(
+                "GET",
+                "/web/index.php/api/v2/admin/job-titles",
+                JobTitlesPage,
+                query={"limit": limit, "offset": offset},
+            )
+        ).data
+
+    async def create_job_title(self, job_title: JobTitle) -> int:
+        """Create new job title."""
+        response = await self._api_call(
+            "POST",
+            "/web/index.php/api/v2/admin/job-titles",
+            ApiResponse[JobTitle],
+            json_body=job_title.model_dump(by_alias=True, exclude={"id", "is_deleted"}),
+        )
+
+        if response.data.id is None:
+            raise OrangeHRMUnexpectedDataError(
+                "job title creation request returned no id",
+            )
+
+        return response.data.id
+
+    async def delete_job_titles(self, job_titles_ids: list[int]) -> None:
+        """Delete job titles with given ids."""
+
+        logger.debug(f"Deleting job titles {job_titles_ids}")
+        deleted_nums = (
+            await self._api_call(
+                "DELETE",
+                "/web/index.php/api/v2/admin/job-titles",
+                ApiResponse[list[int]],
+                json_body={"ids": job_titles_ids},
+            )
+        ).data
+
+        if sorted(job_titles_ids) != sorted(deleted_nums):
+            raise OrangeHRMUnexpectedDataError(
+                "reported list of deleted job titles differs from the request. "
+                f"Requested {job_titles_ids}, reported {deleted_nums}",
             )

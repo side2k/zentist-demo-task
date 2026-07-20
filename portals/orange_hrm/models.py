@@ -199,6 +199,20 @@ class EmploymentStatusesPage(ApiResponse[list[EmploymentStatus]]):
     meta: EmploymentStatusesPageMeta
 
 
+class JobTitlesPageMeta(BaseModel):
+    """Metadata returned with a job titles page."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    total: int
+
+
+class JobTitlesPage(ApiResponse[list[JobTitle]]):
+    """A single page from the job titles endpoint."""
+
+    meta: JobTitlesPageMeta
+
+
 class JobCategory(BaseModel):
     """Job category reference on an employee job details record."""
 
