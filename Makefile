@@ -1,4 +1,4 @@
-.PHONY: test test-e2e-staging generate-demo-input
+.PHONY: test test-e2e-staging generate-demo-input run
 
 test:
 	poetry run pytest
@@ -8,3 +8,6 @@ test-e2e-staging:
 
 generate-demo-input:
 	poetry run python -m tools.generate_orangehrm_demo_input
+
+run:
+	poetry run python run.py
