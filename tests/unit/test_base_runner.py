@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -12,6 +12,8 @@ from portals.base_runner import (
     BasePortalRunner,
     ItemProcessingResult,
     ItemProcessingStats,
+    PortalBatchRunReport,
+    PortalBatchRunReportStats,
     merge_config,
 )
 from portals.errors import UnrecoverablePortalError
@@ -122,3 +124,133 @@ def test_base_portal_runner_init() -> None:
         # Logger.exception should have been called
         mock_log_exception.assert_called_once()
         assert "Error loading config:" in mock_log_exception.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_base_portal_runner_run_calls_lifecycle_methods(
+    mock_shutdown_event: asyncio.Event,
+) -> None:
+    """Test that run() internal sequence.
+
+    Ensure before_run, process_batch_items, and after_run in the proper order.
+    """
+    runner = BasePortalRunner(logger_name="test_logger", config={})
+
+    # Mock the lifecycle methods to track calls
+    runner.before_run = AsyncMock()  # type: ignore[method-assign]
+    runner.process_batch_items = AsyncMock(  # type: ignore[method-assign]
+        return_value=PortalBatchRunReport(),
+    )
+    runner.after_run = AsyncMock()  # type: ignore[method-assign]
+
+    # Create empty async iterator
+    async def empty_batch() -> AsyncIterator[Any]:
+        if False:  # Make it a generator
+            yield
+        return
+
+    batch = empty_batch()
+
+    # Call run
+    result = await runner.run(batch, mock_shutdown_event)
+
+    # Verify all methods were called
+    runner.before_run.assert_awaited_once()
+    runner.process_batch_items.assert_awaited_once()
+    runner.after_run.assert_awaited_once()
+
+    # Verify result is from process_batch_items
+    assert isinstance(result, PortalBatchRunReport)
+
+
+@pytest.mark.asyncio
+async def test_base_portal_runner_run_returns_stats_from_process_batch_items(
+    mock_shutdown_event: asyncio.Event,
+) -> None:
+    """Test that run() returns the stats from process_batch_items()."""
+    runner = BasePortalRunner(logger_name="test_logger", config={})
+
+    # Create expected stats
+    expected_stats = PortalBatchRunReportStats(
+        successful_items=5,
+        failed_items=2,
+    )
+    expected_stats.processing_results.update_with_result(ItemProcessingResult.CREATED)
+    expected_stats.processing_results.update_with_result(ItemProcessingResult.UPDATED)
+
+    # Mock process_batch_items to return specific stats
+    runner.before_run = AsyncMock()  # type: ignore[method-assign]
+    runner.process_batch_items = AsyncMock(
+        return_value=PortalBatchRunReport(statistics=expected_stats),
+    )  # type: ignore[method-assign]
+    runner.after_run = AsyncMock()  # type: ignore[method-assign]
+
+    async def empty_batch() -> AsyncIterator[Any]:
+        if False:
+            yield
+        return
+
+    batch = empty_batch()
+
+    # Call run
+    result = await runner.run(batch, mock_shutdown_event)
+
+    # Verify returned stats match
+    assert result.statistics.successful_items == 5
+    assert result.statistics.failed_items == 2
+    assert result.statistics.processing_results.created == 1
+    assert result.statistics.processing_results.updated == 1
+
+
+@pytest.mark.asyncio
+async def test_base_portal_runner_run_empty_batch_processes_successfully(
+    mock_shutdown_event: asyncio.Event,
+) -> None:
+    """Test that run() handles an empty batch successfully."""
+    runner = BasePortalRunner(logger_name="test_logger", config={})
+
+    async def empty_batch() -> AsyncIterator[Any]:
+        if False:
+            yield
+        return
+
+    batch = empty_batch()
+
+    # Call run with empty batch
+    result = await runner.run(batch, mock_shutdown_event)
+
+    # Verify result is valid stats with zeros
+    assert isinstance(result, PortalBatchRunReport)
+    assert result.statistics.successful_items == 0
+    assert result.statistics.failed_items == 0
+
+
+@pytest.mark.asyncio
+async def test_base_portal_runner_run_after_run_called_even_if_exception(
+    mock_shutdown_event: asyncio.Event,
+) -> None:
+    """Test that after_run() is called even if process_batch_items raises ."""
+    runner = BasePortalRunner(logger_name="test_logger", config={})
+
+    # Mock methods
+    runner.before_run = AsyncMock()  # type: ignore[method-assign]
+    runner.process_batch_items = AsyncMock(  # type: ignore[method-assign]
+        side_effect=RuntimeError("Test error"),
+    )
+    runner.after_run = AsyncMock()  # type: ignore[method-assign]
+
+    async def empty_batch() -> AsyncIterator[Any]:
+        if False:
+            yield
+        return
+
+    batch = empty_batch()
+
+    # Call run and expect exception
+    with pytest.raises(RuntimeError, match="Test error"):
+        await runner.run(batch, mock_shutdown_event)
+
+    # Verify after_run was still called (finally block)
+    runner.before_run.assert_awaited_once()
+    runner.process_batch_items.assert_awaited_once()
+    runner.after_run.assert_awaited_once()
