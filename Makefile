@@ -18,3 +18,6 @@ migrate-db:
 reset-db:
 	rm -f db.sqlite
 	poetry run alembic upgrade head
+
+last-reports:
+	sqlite3 -header -line db.sqlite 'SELECT * FROM portal_runs WHERE id IN (SELECT MAX(id) FROM portal_runs GROUP BY portal_key) ORDER BY id DESC;'

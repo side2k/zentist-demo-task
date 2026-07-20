@@ -7,7 +7,7 @@ import asyncio
 import enum
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Generic, TypeVar
@@ -101,7 +101,13 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
     logger: logging.Logger
     retry_interval: int  # in seconds
 
-    def __init__(self, logger_name: str, config: dict, report_filename: str):
+    def __init__(
+        self,
+        logger_name: str,
+        config: dict,
+        update_callback: Callable[[PortalBatchRunReport], Awaitable[None]]
+        | None = None,
+    ):
         self.logger = logging.getLogger(logger_name)
 
         default_config = self.Config().model_dump()
@@ -116,7 +122,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
         self.retries = self.config.retries
         self.retry_interval = self.config.retry_interval_seconds
         self.report = PortalBatchRunReport()
-        self.report_filename = report_filename
+        self.update_callback = update_callback
 
     async def before_run(self) -> None:
         """Do stuff up before run begins.
@@ -137,7 +143,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
     ) -> PortalBatchRunReport:
         """Fire before_run() and after_run() events, running processing between them."""
 
-        await self.update_report_file(self.report)
+        await self.update_report(self.report)
         await self.before_run()
         try:
             return await self.process_batch_items(data_batch, shutdown_event)
@@ -174,7 +180,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
                     self.report.statistics.successful_items += 1
                     self.report.statistics.processing_results.update_with_result(result)
                     self.logger.info(f"Processed item {item.id}: {result.name}")
-                    await self.update_report_file(self.report)
+                    await self.update_report(self.report)
 
                     break
                 except RecoverablePortalError:
@@ -188,7 +194,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
                     )
                     self.logger.error("Skipping to the next item")  # noqa: TRY400
                     self.report.statistics.failed_items += 1
-                    await self.update_report_file(self.report)
+                    await self.update_report(self.report)
                     break
 
                 if retries_left > 0:
@@ -203,11 +209,11 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
                         continue
 
                 self.report.statistics.failed_items += 1
-                await self.update_report_file(self.report)
+                await self.update_report(self.report)
 
         self.report.finished_at = datetime.now(UTC)
         self.report.state = PortalRunState.FINISHED
-        await self.update_report_file(self.report)
+        await self.update_report(self.report)
         return self.report
 
     async def process_batch_item(self, item: InputItemT) -> ItemProcessingResult:  # noqa: D102
@@ -231,14 +237,12 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
             # avoid blocking
             await asyncio.sleep(0)
 
-    async def update_report_file(self, report: PortalBatchRunReport) -> None:
-        """Write report to the self.report_filename in JSON format."""
-        try:
-            report_data = report.model_dump_json(indent=2)
-            await asyncio.to_thread(
-                Path(self.report_filename).write_text,
-                report_data,
-                encoding="utf-8",
-            )
-        except Exception:
-            self.logger.exception(f"Failed to write report to {self.report_filename}")
+    async def update_report(self, report: PortalBatchRunReport) -> None:
+        """Write report data to the outer layer."""
+
+        # Call update callback if provided
+        if self.update_callback:
+            try:
+                await self.update_callback(report)
+            except Exception:
+                self.logger.exception("Failed to execute update callback")

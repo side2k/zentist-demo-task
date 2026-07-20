@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from db.service import create_run, get_engine, get_session_maker, update_run
+from portals.base_runner import PortalBatchRunReport
+
 if TYPE_CHECKING:
     from .portals import BasePortalRunner
 
@@ -41,7 +44,7 @@ def parse_args() -> argparse.Namespace:  # noqa: D103
 
 def ensure_required_dirs() -> None:
     """Check required directories exist, and if not - create them."""
-    required_dirs = ["logs", "reports"]
+    required_dirs = ["logs"]
     for dir_name in required_dirs:
         Path(dir_name).mkdir(exist_ok=True)
 
@@ -76,22 +79,48 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
     with Path(cli_args.config).open() as config_file:  # noqa: ASYNC230
         root_config = RootConfig.model_validate(json.load(config_file))
 
+    # Initialize database
+    engine = get_engine()
+    session_maker = get_session_maker(engine)
+
     for portal_key, portal_config_raw in root_config.portals.items():
         logger.info(f"Loading portal runner '{portal_key}'")
         portal_module = importlib.import_module(f"portals.{portal_key}")
         portal_logger = logging.getLogger(f"portals.{portal_key}")
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
-        configure_portal_logger(portal_logger, f"logs/{portal_key}-{timestamp}.log")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S%f")
+        run_key = f"{portal_key}-{timestamp}"
+        configure_portal_logger(portal_logger, f"logs/{run_key}.log")
+
+        # Create database record for this run
+        async with session_maker() as session:
+            run = await create_run(
+                session,
+                run_key=run_key,
+                portal_key=portal_key,
+                started_at=datetime.now(UTC),
+            )
+
+        # Define callback to update database
+        async def update_db_callback(report: PortalBatchRunReport) -> None:
+            # Creating a session for every callback call is safer and more robust
+            # for async access.
+            async with session_maker() as session:
+                await update_run(session, run.run_key, report)  # noqa: B023
+
         runner_class: type[BasePortalRunner] = portal_module.Runner
         portal_runner: BasePortalRunner = runner_class(
             portal_logger.name,
             portal_config_raw,
-            f"reports/{portal_key}-{timestamp}.json",
+            update_db_callback,
         )
+
         portal_input_data = portal_runner.load_input_data(f"input/{portal_key}.json")
         portal_stats_report = await portal_runner.run(portal_input_data, shutdown_event)
+
         logger.info(f"{portal_key} run stats:")
         logger.info(f"{portal_stats_report.model_dump()}")
+
+    await engine.dispose()
 
 
 if __name__ == "__main__":
