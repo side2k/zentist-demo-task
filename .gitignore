@@ -11,3 +11,4 @@ __pycache__/
 /logs/
 /reports/
 db.sqlite
+config.json
