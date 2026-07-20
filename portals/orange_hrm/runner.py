@@ -116,10 +116,9 @@ class OrangeHRMPortalRunner(  # noqa: D101
                     work_email=item.email,
                 ),
             )
-        elif (
-            summary.contact_info.work_email != item.email
-            or summary.contact_info.work_telephone != item.phone
-        ):
+        elif summary.contact_info.work_email != (
+            item.email or None
+        ) or summary.contact_info.work_telephone != (item.phone or None):
             self.logger.debug(f"Item {item.id}: contact details differ")
             contact_details = await self.client.fetch_employee_contact_details(
                 summary.emp_number,
