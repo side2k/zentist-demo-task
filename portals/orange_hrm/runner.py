@@ -94,6 +94,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
 
         # check and update main fields
         if not was_created and item.differs_from_summary(summary):
+            self.logger.debug(f"Item {item.id}: summary differs")
             personal_details = await self.client.fetch_employee_personal_details(
                 summary.emp_number,
             )
@@ -119,6 +120,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
             summary.contact_info.work_email != item.email
             or summary.contact_info.work_telephone != item.phone
         ):
+            self.logger.debug(f"Item {item.id}: contact details differ")
             contact_details = await self.client.fetch_employee_contact_details(
                 summary.emp_number,
             )
@@ -136,6 +138,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
             or len(await self.client.fetch_all_salary_attachments(summary.emp_number))
             == 0
         ):
+            self.logger.debug(f"Item {item.id}: uploading salary doc")
             await self.client.add_salary_attachment(
                 summary.emp_number,
                 SalaryAttachmentUpload.from_bytes(
@@ -160,6 +163,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
                 job_details.job_title.title != item.job_title
                 or job_details.emp_status.name != item.employment_status
             ):
+                self.logger.debug(f"Item {item.id}: job details differ")
                 job_details = await self.construct_job_details(item)
                 await self.client.update_employee_job_details(
                     summary.emp_number,
@@ -224,8 +228,10 @@ class OrangeHRMPortalRunner(  # noqa: D101
         """
 
         if cached_item := self._employees_cache.get(input_item.email):
+            self.logger.debug(f"Item {input_item.id}: found in cache")
             return cached_item.summary, False
 
+        self.logger.debug(f"Item {input_item.id}: creating new")
         employee_num = await self.client.create_employee_with_retry(
             EmployeeCreateRequest(
                 first_name=input_item.first_name,
