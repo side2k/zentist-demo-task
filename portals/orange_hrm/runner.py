@@ -27,6 +27,7 @@ from .models import (
 
 class OrangeHRMPortalRunnerConfig(BasePortalRunnerConfig):  # noqa: D101
     tracing_enabled: bool = False
+    proxy: str | None = None
     username_env_var: str = "ORANGE_HRM_STAGING_USERNAME"
     password_env_var: str = "ORANGE_HRM_STAGING_PASSWORD"  # noqa: S105
 
@@ -179,7 +180,11 @@ class OrangeHRMPortalRunner(  # noqa: D101
         return ItemProcessingResult.UNCHANGED
 
     async def before_run(self) -> None:  # noqa: D102
-        self._session = aiohttp.ClientSession()
+        session_kwargs = {}
+        if self.config.proxy:
+            self.logger.info(f"Using proxy: {self.config.proxy}")
+            session_kwargs["proxy"] = self.config.proxy
+        self._session = aiohttp.ClientSession(**session_kwargs)
         self.client = OrangeHRMClient(self._session, self.config.model_dump())
         username = os.environ[self.config.username_env_var]
         password = os.environ[self.config.password_env_var]
