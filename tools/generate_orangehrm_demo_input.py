@@ -135,7 +135,12 @@ async def run() -> None:
     username = os.environ["ORANGE_HRM_STAGING_USERNAME"]
     password = os.environ["ORANGE_HRM_STAGING_PASSWORD"]
 
-    async with aiohttp.ClientSession() as session:
+    session_kwargs = {}
+    proxy = os.environ.get("HTTPS_PROXY")
+    if proxy:
+        session_kwargs["proxy"] = proxy
+
+    async with aiohttp.ClientSession(**session_kwargs) as session:
         client = OrangeHRMClient(session)
         await client.login(username, password)
         existing_employees = await get_employees_data_sample(client)
