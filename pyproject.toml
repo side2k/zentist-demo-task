@@ -12,6 +12,9 @@ dependencies = [
     "beautifulsoup4 (>=4.15.0,<5.0.0)",
     "python-dotenv (>=1.2.2,<2.0.0)",
     "pydantic (>=2.13.4,<3.0.0)",
+    "sqlalchemy (>=2.0.51,<3.0.0)",
+    "alembic (>=1.18.5,<2.0.0)",
+    "aiosqlite (>=0.22.1,<0.23.0)",
 ]
 
 [dependency-groups]
@@ -66,4 +69,11 @@ ignore = [
     "S105", # Possible hardcoded password (public demo credentials)
     "S106", # Possible hardcoded password (public demo credentials)
     "PLR2004", # Magic value in comparison (fine in tests)
+]
+"alembic/versions/**" = [
+    "D", # docstrings
+    "INP001", # missing __init__
+    "UP007", # Use `X | Y` for type annotations
+    "UP035", # Import from `collections.abc` instead: `Sequence`
+
 ]
