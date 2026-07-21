@@ -1,0 +1,10 @@
+{
+  "report_to": ["someone@portalrunner.test"],
+  "smtp_server": {
+    "host": "maildev",
+    "port": 1025
+  },
+  "portals": {
+    "orange_hrm": {}
+  }
+}
