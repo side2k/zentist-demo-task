@@ -6,6 +6,7 @@ import importlib
 import json
 import logging
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from signal import SIGINT, SIGTERM
 from typing import TYPE_CHECKING
@@ -14,7 +15,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from db.service import create_run, get_engine, get_session_maker, update_run
-from portals.base_runner import PortalBatchRunReport
+from portals.base_runner import PortalBatchRunReport, PortalRunState
+from reporting.email import send_email_report
 
 if TYPE_CHECKING:
     from .portals import BasePortalRunner
@@ -86,6 +88,25 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
     with Path(cli_args.config).open() as config_file:  # noqa: ASYNC230
         root_config = RootConfig.model_validate(json.load(config_file))
 
+    if root_config.smtp_server:
+        logger.info(
+            "SMTP server configured: "
+            f"{root_config.smtp_server.host}:{root_config.smtp_server.port}",
+        )
+        send_report = partial(
+            send_email_report,
+            root_config.smtp_server.host,
+            root_config.smtp_server.port,
+            root_config.report_to,
+        )
+    else:
+        logger.warning("No SMTP server configured, reports will not be sent")
+
+        async def send_report(portal_key: str, report: PortalBatchRunReport) -> None:  # noqa: ARG001
+            logger.warning(
+                f"No SMTP server configured, {portal_key} report will not be sent",
+            )
+
     # Initialize database
     engine = get_engine()
     session_maker = get_session_maker(engine)
@@ -113,6 +134,10 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
             # for async access.
             async with session_maker() as session:
                 await update_run(session, run.run_key, report)  # noqa: B023
+
+            if report.state == PortalRunState.FINISHED:
+                # send report to email
+                await send_report(portal_key, report)  # noqa: B023
 
         runner_class: type[BasePortalRunner] = portal_module.Runner
         portal_runner: BasePortalRunner = runner_class(
