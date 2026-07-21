@@ -22,8 +22,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class SMTPServerConfig(BaseModel):  # noqa: D101
+    host: str
+    port: int
+
+
 class RootConfig(BaseModel):  # noqa: D101
     portals: dict[str, dict]
+    report_to: list[str]
+    smtp_server: SMTPServerConfig | None = None
 
 
 def parse_args() -> argparse.Namespace:  # noqa: D103
