@@ -1,0 +1,15 @@
+name: Test
+
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f docker/runner.Dockerfile --target staging -t runner .
+
+      - name: Run tests
+        run: docker run --rm runner test
