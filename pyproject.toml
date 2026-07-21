@@ -20,7 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff (>=0.15.21,<0.16.0)",
+    "ruff (==0.15.21)",
 ]
 test = [
     "pytest (>=9.1.1,<10.0.0)",
@@ -70,6 +70,11 @@ ignore = [
     "S105", # Possible hardcoded password (public demo credentials)
     "S106", # Possible hardcoded password (public demo credentials)
     "PLR2004", # Magic value in comparison (fine in tests)
+]
+"alembic/env.py" = [
+    "D100", # missing module docstring in auto-generated file
+    "INP001", # Alembic intentionally omits __init__.py
+    "ERA001", # Alembic intentionally keeps commented-out boilerplate
 ]
 "alembic/versions/**" = [
     "D", # docstrings
