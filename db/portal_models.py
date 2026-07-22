@@ -112,6 +112,7 @@ def portal_error_table_name(portal_key: str) -> str:
 # that adds database table for that portal's output items
 installed_portals = [
     "orange_hrm",
+    "saucedemo",
 ]
 for portal_key in installed_portals:
     portal_module = importlib.import_module(f"portals.{portal_key}")
