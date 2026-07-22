@@ -35,29 +35,8 @@ class BasePortalRunnerConfig(BaseModel):  # noqa: D101
     retry_interval_seconds: int = 10
 
 
-class ItemProcessingResult(enum.Enum):  # noqa: D101
-    UNCHANGED = 1
-    CREATED = 2
-    UPDATED = 3
-
-
-# Ideally this model should've been created dynamically based on ItemProcessingResult's
-# member. But it leads to an ugly and struggle with type checking tools.
-# Tradeoff of the current approach is that if there are members of enum that doesn't
-# have respective members in this model, it will lead to errors.
-class ItemProcessingStats(BaseModel):  # noqa: D101
-    unchanged: int = 0
-    created: int = 0
-    updated: int = 0
-
-    def update_with_result(self, result: ItemProcessingResult) -> None:  # noqa: D102
-        match result:
-            case ItemProcessingResult.UNCHANGED:
-                self.unchanged += 1
-            case ItemProcessingResult.CREATED:
-                self.created += 1
-            case ItemProcessingResult.UPDATED:
-                self.updated += 1
+class BaseItemProcessingResult(BaseModel):  # noqa: D101
+    pass
 
 
 class PortalBatchRunReportStats(BaseModel):
@@ -65,8 +44,6 @@ class PortalBatchRunReportStats(BaseModel):
 
     successful_items: int = 0
     failed_items: int = 0
-
-    processing_results: ItemProcessingStats = ItemProcessingStats()
 
 
 class PortalRunState(enum.Enum):  # noqa: D101
@@ -92,11 +69,13 @@ class BasePortalRunnerInputItem(BaseModel):
 
 ConfigT = TypeVar("ConfigT", bound=BasePortalRunnerConfig)
 InputItemT = TypeVar("InputItemT", bound=BasePortalRunnerInputItem)
+OutputItemT = TypeVar("OutputItemT", bound=BaseItemProcessingResult)
 
 
-class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
+class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
     Config: type[ConfigT] = BasePortalRunnerConfig  # type: ignore[assignment]
     InputItem: type[InputItemT] = BasePortalRunnerInputItem  # type: ignore[assignment]
+    OutputItem: type[OutputItemT] = BaseItemProcessingResult  # type: ignore[assignment]
 
     logger: logging.Logger
     retry_interval: int  # in seconds
@@ -146,7 +125,24 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
         await self.update_report(self.report)
         await self.before_run()
         try:
-            return await self.process_batch_items(data_batch, shutdown_event)
+            async for input_item, result in self.process_batch_items(
+                data_batch,
+                shutdown_event,
+            ):
+                if isinstance(result, self.OutputItem):
+                    self.report.statistics.successful_items += 1
+                    self.logger.info(f"Processed item {input_item.id}: {result}")
+                    await self.update_report(self.report)
+                else:  # result is an exception
+                    self.logger.error("Skipping to the next item")
+                    self.report.statistics.failed_items += 1
+                    await self.update_report(self.report)
+
+            self.report.finished_at = datetime.now(UTC)
+            self.report.state = PortalRunState.FINISHED
+            await self.update_report(self.report)
+
+            return self.report
         finally:
             await self.after_run()
 
@@ -154,7 +150,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
         self,
         data_batch: AsyncIterator[InputItemT],
         shutdown_event: asyncio.Event,
-    ) -> PortalBatchRunReport:
+    ) -> AsyncIterator[tuple[InputItemT, OutputItemT | Exception]]:
         """Call process_batch_item() for every item in data_batch with retries.
 
         When the error is RecoverablePortalError and there are still retries left,
@@ -176,25 +172,18 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
             while retries_left > 0:
                 retries_left -= 1
                 try:
-                    result = await self.process_batch_item(item)
-                    self.report.statistics.successful_items += 1
-                    self.report.statistics.processing_results.update_with_result(result)
-                    self.logger.info(f"Processed item {item.id}: {result.name}")
-                    await self.update_report(self.report)
-
+                    yield item, await self.process_batch_item(item)
                     break
                 except RecoverablePortalError:
                     self.logger.exception(
                         f"Caught recoverable error while processing item {item.id}",
                     )
                     self.logger.warning(f"{retries_left} retries left")
-                except UnrecoverablePortalError:
+                except UnrecoverablePortalError as exc:
                     self.logger.exception(
                         f"Caught unrecoverable error while processing item {item.id}",
                     )
-                    self.logger.error("Skipping to the next item")  # noqa: TRY400
-                    self.report.statistics.failed_items += 1
-                    await self.update_report(self.report)
+                    yield item, exc
                     break
 
                 if retries_left > 0:
@@ -203,20 +192,17 @@ class BasePortalRunner(Generic[ConfigT, InputItemT]):  # noqa: D101
                             shutdown_event.wait(),
                             timeout=self.retry_interval,
                         )
-                        self.report.statistics.failed_items += 1
+                        yield (
+                            item,
+                            UnrecoverablePortalError("Shutdown request received"),
+                        )
                         break
                     except TimeoutError:
                         continue
 
-                self.report.statistics.failed_items += 1
-                await self.update_report(self.report)
+                yield item, UnrecoverablePortalError("No retries left")
 
-        self.report.finished_at = datetime.now(UTC)
-        self.report.state = PortalRunState.FINISHED
-        await self.update_report(self.report)
-        return self.report
-
-    async def process_batch_item(self, item: InputItemT) -> ItemProcessingResult:  # noqa: D102
+    async def process_batch_item(self, item: InputItemT) -> OutputItemT:  # noqa: D102
         raise NotImplementedError
 
     async def load_input_data(self, filename: str) -> AsyncIterator[InputItemT]:

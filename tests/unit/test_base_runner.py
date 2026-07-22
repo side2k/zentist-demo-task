@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from portals.base_runner import (
+    BaseItemProcessingResult,
     BasePortalRunner,
-    ItemProcessingResult,
-    ItemProcessingStats,
+    BasePortalRunnerInputItem,
     PortalBatchRunReport,
-    PortalBatchRunReportStats,
+    PortalRunState,
     merge_config,
 )
 from portals.errors import UnrecoverablePortalError
@@ -43,6 +43,11 @@ async def async_iter_from_list(items: list[Any]) -> AsyncIterator[Any]:
         yield item
 
 
+async def empty_async_iterator(*_args, **_kwargs) -> AsyncIterator[Any]:  # noqa: ANN002, ANN003
+    if False:
+        yield
+
+
 def test_merge_config() -> None:
     # Recursive merge of nested dicts
     assert merge_config(
@@ -66,30 +71,6 @@ def test_merge_config() -> None:
         {"l1": {"l2": {"l3": {"l4": "deep", "other": "val"}}}},
         {"l1": {"l2": {"l3": {"l4": "new_deep", "extra": "added"}}}},
     ) == {"l1": {"l2": {"l3": {"l4": "new_deep", "other": "val", "extra": "added"}}}}
-
-
-def test_item_processing_stats_update_with_result() -> None:
-    # Initial state (all zeros)
-    stats = ItemProcessingStats()
-    assert stats.unchanged == 0
-    assert stats.created == 0
-    assert stats.updated == 0
-
-    # Update with UNCHANGED increments unchanged counter
-    stats.update_with_result(ItemProcessingResult.UNCHANGED)
-    assert stats.unchanged == 1
-    assert stats.created == 0
-    assert stats.updated == 0
-
-    # Multiple updates accumulate correctly
-    stats.update_with_result(ItemProcessingResult.CREATED)
-    stats.update_with_result(ItemProcessingResult.CREATED)
-    stats.update_with_result(ItemProcessingResult.UPDATED)
-    stats.update_with_result(ItemProcessingResult.UNCHANGED)
-
-    assert stats.unchanged == 2
-    assert stats.created == 2
-    assert stats.updated == 1
 
 
 def test_base_portal_runner_init() -> None:
@@ -137,69 +118,15 @@ async def test_base_portal_runner_run_calls_lifecycle_methods(
     runner = BasePortalRunner(logger_name="test_logger", config={})
 
     # Mock the lifecycle methods to track calls
-    runner.before_run = AsyncMock()  # type: ignore[method-assign]
-    runner.process_batch_items = AsyncMock(  # type: ignore[method-assign]
-        return_value=PortalBatchRunReport(),
-    )
-    runner.after_run = AsyncMock()  # type: ignore[method-assign]
+    runner.before_run = AsyncMock()
+    runner.process_batch_items = empty_async_iterator  # type: ignore[method-assign]
+    runner.after_run = AsyncMock()
 
-    # Create empty async iterator
-    async def empty_batch() -> AsyncIterator[Any]:
-        if False:  # Make it a generator
-            yield
-        return
-
-    batch = empty_batch()
-
-    # Call run
-    result = await runner.run(batch, mock_shutdown_event)
+    await runner.run(empty_async_iterator(), mock_shutdown_event)
 
     # Verify all methods were called
     runner.before_run.assert_awaited_once()
-    runner.process_batch_items.assert_awaited_once()
     runner.after_run.assert_awaited_once()
-
-    # Verify result is from process_batch_items
-    assert isinstance(result, PortalBatchRunReport)
-
-
-@pytest.mark.asyncio
-async def test_base_portal_runner_run_returns_stats_from_process_batch_items(
-    mock_shutdown_event: asyncio.Event,
-) -> None:
-    """Test that run() returns the stats from process_batch_items()."""
-    runner = BasePortalRunner(logger_name="test_logger", config={})
-
-    # Create expected stats
-    expected_stats = PortalBatchRunReportStats(
-        successful_items=5,
-        failed_items=2,
-    )
-    expected_stats.processing_results.update_with_result(ItemProcessingResult.CREATED)
-    expected_stats.processing_results.update_with_result(ItemProcessingResult.UPDATED)
-
-    # Mock process_batch_items to return specific stats
-    runner.before_run = AsyncMock()  # type: ignore[method-assign]
-    runner.process_batch_items = AsyncMock(
-        return_value=PortalBatchRunReport(statistics=expected_stats),
-    )  # type: ignore[method-assign]
-    runner.after_run = AsyncMock()  # type: ignore[method-assign]
-
-    async def empty_batch() -> AsyncIterator[Any]:
-        if False:
-            yield
-        return
-
-    batch = empty_batch()
-
-    # Call run
-    result = await runner.run(batch, mock_shutdown_event)
-
-    # Verify returned stats match
-    assert result.statistics.successful_items == 5
-    assert result.statistics.failed_items == 2
-    assert result.statistics.processing_results.created == 1
-    assert result.statistics.processing_results.updated == 1
 
 
 @pytest.mark.asyncio
@@ -209,12 +136,7 @@ async def test_base_portal_runner_run_empty_batch_processes_successfully(
     """Test that run() handles an empty batch successfully."""
     runner = BasePortalRunner(logger_name="test_logger", config={})
 
-    async def empty_batch() -> AsyncIterator[Any]:
-        if False:
-            yield
-        return
-
-    batch = empty_batch()
+    batch = empty_async_iterator()
 
     # Call run with empty batch
     result = await runner.run(batch, mock_shutdown_event)
@@ -223,6 +145,7 @@ async def test_base_portal_runner_run_empty_batch_processes_successfully(
     assert isinstance(result, PortalBatchRunReport)
     assert result.statistics.successful_items == 0
     assert result.statistics.failed_items == 0
+    assert result.state == PortalRunState.FINISHED
 
 
 @pytest.mark.asyncio
@@ -232,19 +155,21 @@ async def test_base_portal_runner_run_after_run_called_even_if_exception(
     """Test that after_run() is called even if process_batch_items raises ."""
     runner = BasePortalRunner(logger_name="test_logger", config={})
 
+    async def process_batch_items_raising(
+        _data_batch: AsyncIterator[Any],
+        _shutdown_event: asyncio.Event,
+    ) -> AsyncIterator[tuple[Any, Any]]:
+        raise RuntimeError("Test error")
+        # Unreachable, but makes this an async generator
+        if False:  # pragma: no cover
+            yield  # type: ignore[unreachable]
+
     # Mock methods
     runner.before_run = AsyncMock()  # type: ignore[method-assign]
-    runner.process_batch_items = AsyncMock(  # type: ignore[method-assign]
-        side_effect=RuntimeError("Test error"),
-    )
+    runner.process_batch_items = process_batch_items_raising  # type: ignore[method-assign]
     runner.after_run = AsyncMock()  # type: ignore[method-assign]
 
-    async def empty_batch() -> AsyncIterator[Any]:
-        if False:
-            yield
-        return
-
-    batch = empty_batch()
+    batch = empty_async_iterator()
 
     # Call run and expect exception
     with pytest.raises(RuntimeError, match="Test error"):
@@ -252,5 +177,39 @@ async def test_base_portal_runner_run_after_run_called_even_if_exception(
 
     # Verify after_run was still called (finally block)
     runner.before_run.assert_awaited_once()
-    runner.process_batch_items.assert_awaited_once()
     runner.after_run.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_base_portal_runner_process_batch_items_yields_per_item(
+    mock_shutdown_event: asyncio.Event,
+) -> None:
+    """process_batch_items() yields exactly one output per input item."""
+    runner = BasePortalRunner(logger_name="test_logger", config={})
+
+    async def process_item(
+        item: BasePortalRunnerInputItem,
+    ) -> BaseItemProcessingResult:
+        if item.id == "2":
+            raise UnrecoverablePortalError("simulating item processing failure")
+        return BaseItemProcessingResult()
+
+    runner.process_batch_item = process_item  # type: ignore[method-assign]
+
+    items = [BasePortalRunnerInputItem(id=str(i)) for i in range(3)]
+
+    results = [
+        (input_item, result)
+        async for input_item, result in runner.process_batch_items(
+            async_iter_from_list(items),
+            mock_shutdown_event,
+        )
+    ]
+
+    assert len(results) == len(items)
+    for (input_item, result), expected_input in zip(results, items, strict=True):
+        assert input_item.id == expected_input.id
+        if input_item.id == "2":
+            assert issubclass(type(result), UnrecoverablePortalError)
+        else:
+            assert isinstance(result, BaseItemProcessingResult)

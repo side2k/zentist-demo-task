@@ -37,9 +37,6 @@ async def create_run(
         state=PortalRunState.IN_PROGRESS.name,
         successful_items=0,
         failed_items=0,
-        unchanged_items=0,
-        created_items=0,
-        updated_items=0,
     )
     session.add(run)
     await session.commit()
@@ -63,8 +60,5 @@ async def update_run(
     run.state = report.state.name
     run.successful_items = report.statistics.successful_items
     run.failed_items = report.statistics.failed_items
-    run.unchanged_items = report.statistics.processing_results.unchanged
-    run.created_items = report.statistics.processing_results.created
-    run.updated_items = report.statistics.processing_results.updated
 
     await session.commit()
