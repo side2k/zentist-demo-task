@@ -198,7 +198,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
         """Prefetch all existing employees and their data.
 
         This is not a production-ready approach - there is an API for searching
-        employers, but implementing that is a bit overkill for a demo task, because
+        employees, but implementing that is a bit overkill for a demo task, because
         matching people data is complex task. For now, I'll just use emails as unique
         identifiers. Employees without email are just skipped.
         """

@@ -62,14 +62,14 @@ async def get_employees_data_sample(
 ) -> list[tuple[EmployeeSummary, EmployeeJobDetails, list[bytes]]]:
     """Return some "real" employees with emails and job details."""
 
-    logger.info("Fetching all existing employers...")
+    logger.info("Fetching all existing employees...")
     employees = await client.fetch_all_employees(use_detailed_model=True)
     employees_with_email = random.sample(
         [e for e in employees if e.contact_info.work_email],
         count,
     )
     logger.info(
-        f"Fetching job details for {len(employees_with_email)} employers...",
+        f"Fetching job details for {len(employees_with_email)} employees...",
     )
     job_details = {
         employee.emp_number: await client.fetch_employee_job_details(
@@ -79,7 +79,7 @@ async def get_employees_data_sample(
     }
 
     logger.info(
-        f"Fetching salary attachments for {len(employees_with_email)} employers...",
+        f"Fetching salary attachments for {len(employees_with_email)} employees...",
     )
     salary_attachments = {}
     for employee in employees_with_email:
