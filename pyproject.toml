@@ -16,6 +16,7 @@ dependencies = [
     "alembic (>=1.18.5,<2.0.0)",
     "aiosqlite (>=0.22.1,<0.23.0)",
     "aiosmtplib (>=5.1.2,<6.0.0)",
+    "faker (>=40.32.0,<41.0.0)",
 ]
 
 [dependency-groups]
@@ -25,7 +26,9 @@ dev = [
 test = [
     "pytest (>=9.1.1,<10.0.0)",
     "pytest-asyncio (>=1.4.0,<2.0.0)",
-    "faker (>=40.31.0,<41.0.0)",
+]
+saucedemo = [
+    "playwright (>=1.61.0,<2.0.0)"
 ]
 
 

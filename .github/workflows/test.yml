@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -f docker/runner.Dockerfile --target staging -t runner .
+        run: docker build -f docker/runner.Dockerfile --target app-tests -t runner .
 
       - name: Run tests
         run: docker run --rm runner test
