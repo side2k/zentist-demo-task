@@ -27,6 +27,7 @@ from .models import (
 
 class OrangeHRMPortalRunnerConfig(BasePortalRunnerConfig):  # noqa: D101
     tracing_enabled: bool = False
+    proxy: str | None = None
     username_env_var: str = "ORANGE_HRM_STAGING_USERNAME"
     password_env_var: str = "ORANGE_HRM_STAGING_PASSWORD"  # noqa: S105
 
@@ -94,6 +95,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
 
         # check and update main fields
         if not was_created and item.differs_from_summary(summary):
+            self.logger.debug(f"Item {item.id}: summary differs")
             personal_details = await self.client.fetch_employee_personal_details(
                 summary.emp_number,
             )
@@ -115,10 +117,10 @@ class OrangeHRMPortalRunner(  # noqa: D101
                     work_email=item.email,
                 ),
             )
-        elif (
-            summary.contact_info.work_email != item.email
-            or summary.contact_info.work_telephone != item.phone
-        ):
+        elif summary.contact_info.work_email != (
+            item.email or None
+        ) or summary.contact_info.work_telephone != (item.phone or None):
+            self.logger.debug(f"Item {item.id}: contact details differ")
             contact_details = await self.client.fetch_employee_contact_details(
                 summary.emp_number,
             )
@@ -136,6 +138,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
             or len(await self.client.fetch_all_salary_attachments(summary.emp_number))
             == 0
         ):
+            self.logger.debug(f"Item {item.id}: uploading salary doc")
             await self.client.add_salary_attachment(
                 summary.emp_number,
                 SalaryAttachmentUpload.from_bytes(
@@ -160,6 +163,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
                 job_details.job_title.title != item.job_title
                 or job_details.emp_status.name != item.employment_status
             ):
+                self.logger.debug(f"Item {item.id}: job details differ")
                 job_details = await self.construct_job_details(item)
                 await self.client.update_employee_job_details(
                     summary.emp_number,
@@ -176,7 +180,11 @@ class OrangeHRMPortalRunner(  # noqa: D101
         return ItemProcessingResult.UNCHANGED
 
     async def before_run(self) -> None:  # noqa: D102
-        self._session = aiohttp.ClientSession()
+        session_kwargs = {}
+        if self.config.proxy:
+            self.logger.info(f"Using proxy: {self.config.proxy}")
+            session_kwargs["proxy"] = self.config.proxy
+        self._session = aiohttp.ClientSession(**session_kwargs)
         self.client = OrangeHRMClient(self._session, self.config.model_dump())
         username = os.environ[self.config.username_env_var]
         password = os.environ[self.config.password_env_var]
@@ -190,7 +198,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
         """Prefetch all existing employees and their data.
 
         This is not a production-ready approach - there is an API for searching
-        employers, but implementing that is a bit overkill for a demo task, because
+        employees, but implementing that is a bit overkill for a demo task, because
         matching people data is complex task. For now, I'll just use emails as unique
         identifiers. Employees without email are just skipped.
         """
@@ -224,8 +232,10 @@ class OrangeHRMPortalRunner(  # noqa: D101
         """
 
         if cached_item := self._employees_cache.get(input_item.email):
+            self.logger.debug(f"Item {input_item.id}: found in cache")
             return cached_item.summary, False
 
+        self.logger.debug(f"Item {input_item.id}: creating new")
         employee_num = await self.client.create_employee_with_retry(
             EmployeeCreateRequest(
                 first_name=input_item.first_name,

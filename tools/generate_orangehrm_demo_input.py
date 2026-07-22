@@ -62,14 +62,14 @@ async def get_employees_data_sample(
 ) -> list[tuple[EmployeeSummary, EmployeeJobDetails, list[bytes]]]:
     """Return some "real" employees with emails and job details."""
 
-    logger.info("Fetching all existing employers...")
+    logger.info("Fetching all existing employees...")
     employees = await client.fetch_all_employees(use_detailed_model=True)
     employees_with_email = random.sample(
         [e for e in employees if e.contact_info.work_email],
         count,
     )
     logger.info(
-        f"Fetching job details for {len(employees_with_email)} employers...",
+        f"Fetching job details for {len(employees_with_email)} employees...",
     )
     job_details = {
         employee.emp_number: await client.fetch_employee_job_details(
@@ -79,7 +79,7 @@ async def get_employees_data_sample(
     }
 
     logger.info(
-        f"Fetching salary attachments for {len(employees_with_email)} employers...",
+        f"Fetching salary attachments for {len(employees_with_email)} employees...",
     )
     salary_attachments = {}
     for employee in employees_with_email:
@@ -135,7 +135,12 @@ async def run() -> None:
     username = os.environ["ORANGE_HRM_STAGING_USERNAME"]
     password = os.environ["ORANGE_HRM_STAGING_PASSWORD"]
 
-    async with aiohttp.ClientSession() as session:
+    session_kwargs = {}
+    proxy = os.environ.get("HTTPS_PROXY")
+    if proxy:
+        session_kwargs["proxy"] = proxy
+
+    async with aiohttp.ClientSession(**session_kwargs) as session:
         client = OrangeHRMClient(session)
         await client.login(username, password)
         existing_employees = await get_employees_data_sample(client)

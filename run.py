@@ -69,9 +69,18 @@ def configure_portal_logger(portal_logger: logging.Logger, log_file_path: str) -
     portal_logger.addHandler(file_handler)
 
 
-async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> None:  # noqa: D103
-    load_dotenv()
+def silence_non_relevant_loggers() -> None:
+    """Set loggers for aiosqlite and others to INFO level.
 
+    Otherwise, when --log-level=DEBUG, they clog the output.
+    """
+    for logger_name in ["aiosqlite"]:
+        logger = logging.getLogger(logger_name)
+        logger.propagate = False
+        logger.setLevel(logging.INFO)
+
+
+def setup_logging(cli_args: argparse.Namespace) -> None:  # noqa: D103
     # Configure root logger with ISO timestamp format for console output
     formatter = logging.Formatter(
         "%(asctime)s %(name)s %(levelname)s: %(message)s",
@@ -83,6 +92,13 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
     root_logger.setLevel(logging.getLevelNamesMapping()[cli_args.log_level])
     root_logger.addHandler(console_handler)
 
+    silence_non_relevant_loggers()
+
+
+async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> None:  # noqa: D103
+    load_dotenv()
+
+    setup_logging(cli_args)
     ensure_required_dirs()
 
     with Path(cli_args.config).open() as config_file:  # noqa: ASYNC230
