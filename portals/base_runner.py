@@ -36,7 +36,7 @@ class BasePortalRunnerConfig(BaseModel):  # noqa: D101
 
 
 class BaseItemProcessingResult(BaseModel):  # noqa: D101
-    pass
+    run_id: int | None = None
 
 
 class PortalBatchRunReportStats(BaseModel):
@@ -84,6 +84,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
         self,
         logger_name: str,
         config: dict,
+        item_output_callback: Callable[[OutputItemT], Awaitable[None]],
         update_callback: Callable[[PortalBatchRunReport], Awaitable[None]]
         | None = None,
     ):
@@ -102,6 +103,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
         self.retry_interval = self.config.retry_interval_seconds
         self.report = PortalBatchRunReport()
         self.update_callback = update_callback
+        self.item_output_callback = item_output_callback
 
     async def before_run(self) -> None:
         """Do stuff up before run begins.
@@ -117,6 +119,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
 
     async def run(
         self,
+        run_id: int,
         data_batch: AsyncIterator[InputItemT],
         shutdown_event: asyncio.Event,
     ) -> PortalBatchRunReport:
@@ -130,8 +133,11 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
                 shutdown_event,
             ):
                 if isinstance(result, self.OutputItem):
+                    if result.run_id is None:
+                        result.run_id = run_id
                     self.report.statistics.successful_items += 1
                     self.logger.info(f"Processed item {input_item.id}: {result}")
+                    await self.update_item(result)
                     await self.update_report(self.report)
                 else:  # result is an exception
                     self.logger.error("Skipping to the next item")
@@ -232,3 +238,11 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
                 await self.update_callback(report)
             except Exception:
                 self.logger.exception("Failed to execute update callback")
+
+    async def update_item(self, item: OutputItemT) -> None:
+        """Send output item to the outer layer."""
+
+        try:
+            await self.item_output_callback(item)
+        except Exception:
+            self.logger.exception("Failed to execute item output callback")

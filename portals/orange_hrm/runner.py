@@ -26,10 +26,10 @@ from .models import (
 )
 
 
-class ItemProcessingResultStatus(enum.Enum):  # noqa: D101
-    UNCHANGED = 1
-    CREATED = 2
-    UPDATED = 3
+class ItemProcessingResultStatus(enum.StrEnum):  # noqa: D101
+    UNCHANGED = "unchanged"
+    CREATED = "created"
+    UPDATED = "updated"
 
 
 class OrangeHRMItemProcessingResult(BaseItemProcessingResult):  # noqa: D101

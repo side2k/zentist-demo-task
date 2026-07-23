@@ -1,13 +1,21 @@
 """Database service for managing portal run records."""
 
+import json
 from datetime import datetime
 
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 
-from db.models import PortalRun
-from portals.base_runner import PortalBatchRunReport, PortalRunState
+from db.models import Base, PortalRun
+from portals.base_runner import (
+    BaseItemProcessingResult,
+    PortalBatchRunReport,
+    PortalRunState,
+)
+
+from .portal_models import portal_output_table_name
 
 DB_URL = "sqlite+aiosqlite:///db.sqlite"
 
@@ -60,5 +68,33 @@ async def update_run(
     run.state = report.state.name
     run.successful_items = report.statistics.successful_items
     run.failed_items = report.statistics.failed_items
+
+    await session.commit()
+
+
+async def _prepare_for_db(obj: BaseModel) -> dict:
+    """Prepares pydantic model's data for inserting into DB."""
+    output = obj.model_dump(mode="json")
+
+    # Convert lists and dicts values to JSON
+    for field, value in output.items():
+        if isinstance(value, (list, dict)):
+            output[field] = json.dumps(value, default=str)
+
+    return output
+
+
+async def add_output_item(
+    session: AsyncSession,
+    portal_key: str,
+    item: BaseItemProcessingResult,
+) -> None:
+    """Insert portal run's output item."""
+
+    table = Base.metadata.tables[portal_output_table_name(portal_key)]
+    data = await _prepare_for_db(item)
+    stmt = insert(table).values(**data)
+
+    await session.execute(stmt)
 
     await session.commit()
