@@ -4,6 +4,7 @@ __pycache__/
 logs/
 input/
 reports/
+data/
 
 .env
 .env.example

@@ -1,4 +1,4 @@
-"""OrangeHRM portal implementation."""
+"""SauceDemo portal implementation."""
 
 from portals.base_runner import PortalItemError as ErrorItem
 

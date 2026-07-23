@@ -22,4 +22,12 @@ if [ "$1" = 'generate-demo-input' ]; then
     exec make generate-demo-input
 fi
 
+if [ "$1" = 'last-output' ]; then
+    exec make last-output
+fi
+
+if [ "$1" = 'last-errors' ]; then
+    exec make last-errors
+fi
+
 exec "$@"
