@@ -16,7 +16,8 @@ test-e2e-staging:
 	pytest -m e2e_staging
 
 generate-demo-input:
-	python -m tools.generate_orangehrm_demo_input
+	python -m tools.generate_orangehrm_demo_input; \
+    python -m tools.generate_saucedemo_demo_input
 
 run:
 	python3 run.py
