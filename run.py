@@ -140,6 +140,8 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
     session_maker = get_session_maker(engine)
 
     for portal_key, portal_config_raw in root_config.portals.items():
+        if cli_args.portal and portal_key != cli_args.portal:
+            continue
         logger.info(f"Loading portal runner '{portal_key}'")
         portal_module = importlib.import_module(f"portals.{portal_key}")
         portal_logger = logging.getLogger(f"portals.{portal_key}")
