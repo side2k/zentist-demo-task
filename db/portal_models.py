@@ -102,6 +102,11 @@ def portal_output_table_name(portal_key: str) -> str:
     return f"{portal_key}_output"
 
 
+def portal_error_table_name(portal_key: str) -> str:
+    """Return table name for portal error data."""
+    return f"{portal_key}_errors"
+
+
 # Add a portal module name here makes it visible to Alembic, so
 # `alembic revision --autogenerate` will be able to generate a migration
 # that adds database table for that portal's output items
@@ -111,8 +116,15 @@ installed_portals = [
 for portal_key in installed_portals:
     portal_module = importlib.import_module(f"portals.{portal_key}")
     portal_output_item_model = portal_module.OutputItem
+    # Table for output items
     pydantic_model_to_sqlalchemy_table(
         portal_output_item_model,
         portal_output_table_name(portal_key),
+        portal_output_metadata,
+    )
+    # Table for errors
+    pydantic_model_to_sqlalchemy_table(
+        portal_module.ErrorItem,
+        portal_error_table_name(portal_key),
         portal_output_metadata,
     )

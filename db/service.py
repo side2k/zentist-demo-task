@@ -12,10 +12,11 @@ from db.models import Base, PortalRun
 from portals.base_runner import (
     BaseItemProcessingResult,
     PortalBatchRunReport,
+    PortalItemError,
     PortalRunState,
 )
 
-from .portal_models import portal_output_table_name
+from .portal_models import portal_error_table_name, portal_output_table_name
 
 DB_URL = "sqlite+aiosqlite:///db.sqlite"
 
@@ -97,4 +98,20 @@ async def add_output_item(
 
     await session.execute(stmt)
 
+    await session.commit()
+
+
+async def add_error_item(
+    session: AsyncSession,
+    portal_key: str,
+    error: PortalItemError,
+) -> None:
+    """Insert portal run's item processing error."""
+
+    table = Base.metadata.tables[portal_error_table_name(portal_key)]
+    data = await _prepare_for_db(error)
+
+    stmt = insert(table).values(**data)
+
+    await session.execute(stmt)
     await session.commit()

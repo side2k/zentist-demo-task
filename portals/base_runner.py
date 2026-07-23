@@ -61,6 +61,14 @@ class PortalBatchRunReport(BaseModel):  # noqa: D101
     finished_at: datetime | None = None
 
 
+class PortalItemError(BaseModel):
+    """Generic model for portal item processing errors."""
+
+    run_id: int
+    input_item_id: str
+    error_message: str
+
+
 class BasePortalRunnerInputItem(BaseModel):
     """Base model class for items in portal runner input data batch."""
 
@@ -87,6 +95,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
         item_output_callback: Callable[[OutputItemT], Awaitable[None]],
         update_callback: Callable[[PortalBatchRunReport], Awaitable[None]]
         | None = None,
+        error_callback: Callable[[PortalItemError], Awaitable[None]] | None = None,
     ):
         self.logger = logging.getLogger(logger_name)
 
@@ -104,6 +113,7 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
         self.report = PortalBatchRunReport()
         self.update_callback = update_callback
         self.item_output_callback = item_output_callback
+        self.error_callback = error_callback
 
     async def before_run(self) -> None:
         """Do stuff up before run begins.
@@ -142,6 +152,13 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
                 else:  # result is an exception
                     self.logger.error("Skipping to the next item")
                     self.report.statistics.failed_items += 1
+                    await self.update_error(
+                        PortalItemError(
+                            run_id=run_id,
+                            input_item_id=input_item.id,
+                            error_message=str(result),
+                        ),
+                    )
                     await self.update_report(self.report)
 
             self.report.finished_at = datetime.now(UTC)
@@ -175,16 +192,19 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
                 break
             self.logger.info(f"Processing item {item.id}")
 
+            last_error: Exception | None = None
+
             while retries_left > 0:
                 retries_left -= 1
                 try:
                     yield item, await self.process_batch_item(item)
                     break
-                except RecoverablePortalError:
+                except RecoverablePortalError as exc:
                     self.logger.exception(
                         f"Caught recoverable error while processing item {item.id}",
                     )
                     self.logger.warning(f"{retries_left} retries left")
+                    last_error = exc
                 except UnrecoverablePortalError as exc:
                     self.logger.exception(
                         f"Caught unrecoverable error while processing item {item.id}",
@@ -206,7 +226,10 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
                     except TimeoutError:
                         continue
 
-                yield item, UnrecoverablePortalError("No retries left")
+                msg = "No retries left"
+                if last_error:
+                    msg += f": {last_error}"
+                yield item, UnrecoverablePortalError(msg)
 
     async def process_batch_item(self, item: InputItemT) -> OutputItemT:  # noqa: D102
         raise NotImplementedError
@@ -246,3 +269,12 @@ class BasePortalRunner(Generic[ConfigT, InputItemT, OutputItemT]):  # noqa: D101
             await self.item_output_callback(item)
         except Exception:
             self.logger.exception("Failed to execute item output callback")
+
+    async def update_error(self, error: PortalItemError) -> None:
+        """Send error data to the outer layer."""
+
+        if self.error_callback:
+            try:
+                await self.error_callback(error)
+            except Exception:
+                self.logger.exception("Failed to execute error callback")
