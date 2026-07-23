@@ -20,7 +20,7 @@ from portals import (
 from portals.errors import UnrecoverablePortalError
 
 if TYPE_CHECKING:
-    from playwright.async_api import Browser, Page
+    from playwright.async_api import Browser, ConsoleMessage, Page
 
 
 class SauceDemoPortalConfig(BasePortalRunnerConfig):  # noqa: D101
@@ -137,13 +137,23 @@ class SauceDemoPortalRunner(
         browser: Browser,
     ) -> SauceDemoItemProcessingResult:
         page = await browser.new_page()
+        self.errors = []
+
+        async def on_console_message(msg: ConsoleMessage) -> None:
+            if msg.type == "error":
+                self.errors.append(msg)
+                self.logger.warning(f"Browser console error: {msg.text}")
+            elif msg.type == "warning":
+                self.logger.warning(f"Browser console warning: {msg.text}")
+
+        page.on("console", on_console_message)
+
         await page.goto(self.base_url)
 
         # login
         login_error = await self._login(page, item)
         if login_error:
-            self.logger.warning(f"Login error: {login_error}")
-            raise UnrecoverablePortalError("Login error")
+            raise UnrecoverablePortalError(f"Login error: {login_error}")
 
         self.logger.debug("Logged in")
 
@@ -242,14 +252,20 @@ class SauceDemoPortalRunner(
                 name="Add to cart",
                 exact=True,
             ).click()
-            items_added.append(item)
 
             await inventory_page.wait_for_load_state("domcontentloaded")
+
+            if await item_container.get_by_role("button", name="Remove").count() != 1:
+                raise UnrecoverablePortalError(
+                    f"Add to cart button for item [{item_title}] didn't work properly",
+                )
+
             cart_badge_number = await self._cart_badge_number(inventory_page)
             if cart_badge_number != len(items_added):
                 raise UnrecoverablePortalError(
                     f"cart badge was not updated after adding item [{item_title}]",
                 )
+            items_added.append(item)
         return items_added
 
     async def _cart_badge_number(self, page: Page) -> int | None:
