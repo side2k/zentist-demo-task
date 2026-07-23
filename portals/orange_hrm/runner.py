@@ -1,15 +1,16 @@
 """OrangeHRM portal runner."""
 
+import enum
 import os
 
 import aiohttp
 from pydantic import BaseModel
 
-from portals.base_runner import (
+from portals import (
+    BaseItemProcessingResult,
     BasePortalRunner,
     BasePortalRunnerConfig,
     BasePortalRunnerInputItem,
-    ItemProcessingResult,
 )
 
 from .client import OrangeHRMClient
@@ -23,6 +24,16 @@ from .models import (
     SalaryAttachment,
     SalaryAttachmentUpload,
 )
+
+
+class ItemProcessingResultStatus(enum.StrEnum):  # noqa: D101
+    UNCHANGED = "unchanged"
+    CREATED = "created"
+    UPDATED = "updated"
+
+
+class OrangeHRMItemProcessingResult(BaseItemProcessingResult):  # noqa: D101
+    status: ItemProcessingResultStatus
 
 
 class OrangeHRMPortalRunnerConfig(BasePortalRunnerConfig):  # noqa: D101
@@ -74,10 +85,16 @@ class EmployeeCache(BaseModel):  # noqa: D101
 
 
 class OrangeHRMPortalRunner(  # noqa: D101
-    BasePortalRunner[OrangeHRMPortalRunnerConfig, OrangeHRMPortalRunnerInputItem],
+    BasePortalRunner[
+        OrangeHRMPortalRunnerConfig,
+        OrangeHRMPortalRunnerInputItem,
+        OrangeHRMItemProcessingResult,
+    ],
 ):
     Config = OrangeHRMPortalRunnerConfig
     InputItem = OrangeHRMPortalRunnerInputItem
+    OutputItem = OrangeHRMItemProcessingResult
+
     _employees_cache: dict[str, EmployeeCache]
     _employment_statuses_cache: dict[str, EmploymentStatus]
     _job_titles_cache: dict[str, JobTitle]
@@ -88,7 +105,7 @@ class OrangeHRMPortalRunner(  # noqa: D101
     async def process_batch_item(  # noqa: D102
         self,
         item: OrangeHRMPortalRunnerInputItem,
-    ) -> ItemProcessingResult:
+    ) -> OrangeHRMItemProcessingResult:
 
         summary, was_created = await self.get_or_create_employee(item)
         was_updated = was_created
@@ -172,12 +189,18 @@ class OrangeHRMPortalRunner(  # noqa: D101
                 was_updated = True
 
         if was_created:
-            return ItemProcessingResult.CREATED
+            return OrangeHRMItemProcessingResult(
+                status=ItemProcessingResultStatus.CREATED,
+            )
 
         if was_updated:
-            return ItemProcessingResult.UPDATED
+            return OrangeHRMItemProcessingResult(
+                status=ItemProcessingResultStatus.UPDATED,
+            )
 
-        return ItemProcessingResult.UNCHANGED
+        return OrangeHRMItemProcessingResult(
+            status=ItemProcessingResultStatus.UNCHANGED,
+        )
 
     async def before_run(self) -> None:  # noqa: D102
         session_kwargs = {}

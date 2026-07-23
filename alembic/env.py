@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
+import db.portal_models  # noqa: F401 — required to register models from installed_portals
 from alembic import context
 from db.models import Base
 

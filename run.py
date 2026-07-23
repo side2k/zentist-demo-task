@@ -14,8 +14,20 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from db.service import create_run, get_engine, get_session_maker, update_run
-from portals.base_runner import PortalBatchRunReport, PortalRunState
+from db.service import (
+    add_error_item,
+    add_output_item,
+    create_run,
+    get_engine,
+    get_session_maker,
+    update_run,
+)
+from portals.base_runner import (
+    BaseItemProcessingResult,
+    PortalBatchRunReport,
+    PortalItemError,
+    PortalRunState,
+)
 from reporting.email import send_email_report
 
 if TYPE_CHECKING:
@@ -155,15 +167,29 @@ async def main(cli_args: argparse.Namespace, shutdown_event: asyncio.Event) -> N
                 # send report to email
                 await send_report(portal_key, report)  # noqa: B023
 
+        async def write_output_item_to_db(item: BaseItemProcessingResult) -> None:
+            async with session_maker() as session:
+                await add_output_item(session, portal_key, item)  # noqa: B023
+
+        async def write_error_item_to_db(error: PortalItemError) -> None:
+            async with session_maker() as session:
+                await add_error_item(session, portal_key, error)  # noqa: B023
+
         runner_class: type[BasePortalRunner] = portal_module.Runner
         portal_runner: BasePortalRunner = runner_class(
             portal_logger.name,
             portal_config_raw,
+            write_output_item_to_db,
             update_db_callback,
+            error_callback=write_error_item_to_db,
         )
 
         portal_input_data = portal_runner.load_input_data(f"input/{portal_key}.json")
-        portal_stats_report = await portal_runner.run(portal_input_data, shutdown_event)
+        portal_stats_report = await portal_runner.run(
+            run.id,
+            portal_input_data,
+            shutdown_event,
+        )
 
         logger.info(f"{portal_key} run stats:")
         logger.info(f"{portal_stats_report.model_dump()}")

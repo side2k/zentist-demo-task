@@ -42,10 +42,6 @@ async def send_email_report(  # noqa: D103
         - successful: {report.statistics.successful_items}
         - failed: {report.statistics.failed_items}
 
-        Successfully processed item counts by processing result:
-        - left unchanged: {report.statistics.processing_results.unchanged}
-        - updated: {report.statistics.processing_results.updated}
-        - newly created: {report.statistics.processing_results.created}
     """),  # noqa: E501
     )
 

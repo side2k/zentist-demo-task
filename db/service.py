@@ -1,13 +1,22 @@
 """Database service for managing portal run records."""
 
+import json
 from datetime import datetime
 
-from sqlalchemy import select
+from pydantic import BaseModel
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
 
-from db.models import PortalRun
-from portals.base_runner import PortalBatchRunReport, PortalRunState
+from db.models import Base, PortalRun
+from portals.base_runner import (
+    BaseItemProcessingResult,
+    PortalBatchRunReport,
+    PortalItemError,
+    PortalRunState,
+)
+
+from .portal_models import portal_error_table_name, portal_output_table_name
 
 DB_URL = "sqlite+aiosqlite:///db.sqlite"
 
@@ -37,9 +46,6 @@ async def create_run(
         state=PortalRunState.IN_PROGRESS.name,
         successful_items=0,
         failed_items=0,
-        unchanged_items=0,
-        created_items=0,
-        updated_items=0,
     )
     session.add(run)
     await session.commit()
@@ -63,8 +69,49 @@ async def update_run(
     run.state = report.state.name
     run.successful_items = report.statistics.successful_items
     run.failed_items = report.statistics.failed_items
-    run.unchanged_items = report.statistics.processing_results.unchanged
-    run.created_items = report.statistics.processing_results.created
-    run.updated_items = report.statistics.processing_results.updated
 
+    await session.commit()
+
+
+async def _prepare_for_db(obj: BaseModel) -> dict:
+    """Prepares pydantic model's data for inserting into DB."""
+    output = obj.model_dump(mode="json")
+
+    # Convert lists and dicts values to JSON
+    for field, value in output.items():
+        if isinstance(value, (list, dict)):
+            output[field] = json.dumps(value, default=str)
+
+    return output
+
+
+async def add_output_item(
+    session: AsyncSession,
+    portal_key: str,
+    item: BaseItemProcessingResult,
+) -> None:
+    """Insert portal run's output item."""
+
+    table = Base.metadata.tables[portal_output_table_name(portal_key)]
+    data = await _prepare_for_db(item)
+    stmt = insert(table).values(**data)
+
+    await session.execute(stmt)
+
+    await session.commit()
+
+
+async def add_error_item(
+    session: AsyncSession,
+    portal_key: str,
+    error: PortalItemError,
+) -> None:
+    """Insert portal run's item processing error."""
+
+    table = Base.metadata.tables[portal_error_table_name(portal_key)]
+    data = await _prepare_for_db(error)
+
+    stmt = insert(table).values(**data)
+
+    await session.execute(stmt)
     await session.commit()
