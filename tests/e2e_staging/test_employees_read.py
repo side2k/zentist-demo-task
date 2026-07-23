@@ -30,7 +30,7 @@ async def test_fetch_employees_page_detailed(
     assert isinstance(page.meta.total, int)
     assert len(page.data) <= 50
     assert all(isinstance(e, EmployeeSummary) for e in page.data)
-    assert any(lambda e: e.contact_info.id is not None for e in page.data)
+    assert any(e.contact_info is not None for e in page.data)
 
 
 async def test_fetch_all_employees_paginates(
