@@ -1,0 +1,15 @@
+.venv/
+.vscode/
+__pycache__/
+logs/
+input/
+reports/
+data/
+
+.env
+.env.example
+.envrc
+.gitignore
+config.json.example
+db.sqlite
+/*.md
