@@ -37,15 +37,15 @@ RUN poetry install --only saucedemo
 
 FROM base-image AS app-minimal
 
-COPY . .
-COPY docker/runner.entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
 
 ENTRYPOINT ["/entrypoint.sh"]
 FROM app-minimal AS app-tests
 
 COPY --from=builder-tests $VIRTUAL_ENV $VIRTUAL_ENV
+
+COPY . .
+COPY docker/runner.entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 CMD ["test"]
 FROM app-minimal AS staging
@@ -54,6 +54,10 @@ COPY --from=builder-saucedemo $VIRTUAL_ENV $VIRTUAL_ENV
 
 RUN playwright install-deps
 RUN playwright install chromium
+
+COPY . .
+COPY docker/runner.entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 RUN mkdir data
 RUN make reset-db
