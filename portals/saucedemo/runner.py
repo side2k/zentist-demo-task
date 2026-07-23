@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from playwright.async_api import expect
 from pydantic import BaseModel
 
 from portals import (
@@ -260,20 +261,13 @@ class SauceDemoPortalRunner(
                     f"Add to cart button for item [{item_title}] didn't work properly",
                 )
 
-            cart_badge_number = await self._cart_badge_number(inventory_page)
-            if cart_badge_number != len(items_added):
-                raise UnrecoverablePortalError(
-                    f"cart badge was not updated after adding item [{item_title}]",
-                )
+            await expect(
+                inventory_page.locator(
+                    'span[data-test="shopping-cart-badge"]',
+                ).first,
+            ).to_have_text(str(len(items_added) + 1))
             items_added.append(item)
         return items_added
-
-    async def _cart_badge_number(self, page: Page) -> int | None:
-        badge_text = await page.locator(
-            'span[data-test="shopping-cart-badge"]',
-        ).first.inner_text()
-
-        return int(badge_text)
 
     async def _check_cart(
         self,
