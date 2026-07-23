@@ -18,7 +18,7 @@ from portals.base_runner import (
 
 from .portal_models import portal_error_table_name, portal_output_table_name
 
-DB_URL = "sqlite+aiosqlite:///db.sqlite"
+DB_URL = "sqlite+aiosqlite:///data/db.sqlite"
 
 
 def get_engine() -> AsyncEngine:

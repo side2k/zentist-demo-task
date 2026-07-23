@@ -11,9 +11,13 @@ services:
       - ./input:/app/input
       - ./logs:/app/logs
       - ./config.json:/config.json
+      - runner-database:/app/data
     command: ["run"]
 
   maildev:
     image: maildev/maildev:2.2.1
     ports:
       - 1080:1080
+
+volumes:
+  runner-database:

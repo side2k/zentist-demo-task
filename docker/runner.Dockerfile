@@ -55,5 +55,6 @@ COPY --from=builder-saucedemo $VIRTUAL_ENV $VIRTUAL_ENV
 RUN playwright install-deps
 RUN playwright install chromium
 
+RUN mkdir data
 RUN make reset-db
 CMD ["run"]

@@ -10,5 +10,6 @@ __pycache__/
 
 /logs/
 /reports/
+/data/
 db.sqlite
 config.json
